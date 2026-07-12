@@ -1,0 +1,13 @@
+{
+  "name": "claude-architect",
+  "version": "0.1.0",
+  "description": "A recursive multi-agent orchestration framework for Claude Code. An orchestrator decomposes work into epics/specs/implementations, runs each in an isolated git worktree, and drives a review + architecture-audit + merge pipeline before every squash-merge. Model tier follows role, not depth: orchestration runs on the top tier, bounded leaf work on a cheaper one.",
+  "author": {
+    "name": "Paul Lovy",
+    "url": "https://paullovy.com"
+  },
+  "homepage": "https://github.com/wfbcargo/PaulClaudePlugins",
+  "repository": "https://github.com/wfbcargo/PaulClaudePlugins",
+  "license": "MIT",
+  "keywords": ["orchestration", "multi-agent", "subagents", "worktrees", "architecture", "code-review", "workflow"]
+}
