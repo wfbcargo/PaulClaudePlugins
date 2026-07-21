@@ -19,3 +19,8 @@ chain of thought that produced them). Set auto_fixable:true only for mechanical,
 unambiguous fixes with no new product/architecture/security decisions. Anything
 involving spec disagreement, ambiguity, architectural tradeoffs, or security
 without an obvious mitigation sets verdict needs_human.
+
+Review the diff and its immediate neighborhood; read ONLY the wiki entries your
+spawn prompt cites — don't scan the full `.wiki/`. Architecture-fit is not your
+job (that's `architecture-audit`). Your iteration JSON IS your output — you do not
+write a work-log agent file.

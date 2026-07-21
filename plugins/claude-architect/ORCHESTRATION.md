@@ -102,13 +102,48 @@ discover knowledge worth keeping. A starter skeleton lives in this plugin's
 Fixed structure. Don't invent new top-level files; extend existing ones or add a
 `decisions/<NNNN>-<slug>.md` entry.
 
+### Size budgets (the wiki is read context, so it has a budget)
+
+Every wiki file an agent might read costs context. Keep them lean:
+
+| File | Budget | When exceeded |
+|------|--------|---------------|
+| `rules.md` | ~15 rules / one screen (**hottest** — see Active Rules) | Retire stale rules; demote non-invariants to conventions/architecture |
+| `architecture.md`, `conventions.md` | ~1 screen each | Push detail into a `decisions/<NNNN>` ADR and link it |
+| `gotchas.md`, `glossary.md` | grows slowly; one line per entry | Prune entries no longer true |
+| `decisions/<NNNN>` | one decision per file | Never merge or renumber |
+
+Default is **omit** (see "When agents write to the wiki"). A file over budget is a
+signal to consolidate, not to keep appending. A stale or bloated wiki is a tax on
+every agent that reads it.
+
+### How agents consume the wiki
+
+The orchestrator is the wiki's reader-of-record: it reads what a spawn needs and
+passes **section-level citations or short excerpts** in RELEVANT WIKI ENTRIES —
+never a bare "read `architecture.md`". Leaf and fix agents read ONLY what they're
+handed; they do not scan `.wiki/` to self-orient (missing context → a
+`paused_for_context` request, not a full-wiki read). The two auditors are the
+deliberate exception — `architecture-audit` and `spec-audit` read whole wiki files
+because judging fit/adherence against the whole picture IS their job.
+
 ### Active Rules
 
-`.wiki/rules.md` holds active rules in a flat list with stable IDs (`R-001`, …).
-The orchestrator reads this file ONCE at session start, caches it, and passes the
-contents verbatim under `## ACTIVE RULES` in every spawn prompt. **Sub-agents do
-NOT re-read it** — they receive it inline. If the file changes mid-session,
-refresh the cache; new sub-agents get the update, running ones keep their list.
+`.wiki/rules.md` holds active rules in a flat list with stable IDs (`R-001`, …),
+each tagged `Scope: global` or `Scope: <path-glob>`. This file is **hot**: its
+cost is paid on every spawn × up to `MAX_CONCURRENT_AGENTS`, so it is the single
+biggest context multiplier in the framework. Keep it to true project-wide
+invariants — target ≤ ~15 rules, one screen. Anything that isn't an always-on
+invariant belongs in `conventions.md`/`architecture.md` and reaches agents as a
+cited excerpt (RELEVANT WIKI ENTRIES), not the always-on block.
+
+The orchestrator reads this file ONCE at session start and caches it split by
+scope: the **global subset** goes verbatim into every spawn's `## ACTIVE RULES`; a
+**scoped rule** goes only to agents whose subtree matches its `Scope`. This keeps
+each spawn carrying the invariants it needs and nothing more. **Sub-agents do NOT
+re-read `rules.md`** — they receive their slice inline. If the file changes
+mid-session, refresh the cache; new sub-agents get the update, running ones keep
+their list.
 
 ### When agents write to the wiki
 
@@ -237,22 +272,31 @@ or abort?" Only proceed if told to.
 
 ## SUB-AGENT SPAWN TEMPLATE (mandatory)
 
-Every spawn carries this. Skipping ACTIVE RULES means the sub-agent runs without
-project rules; skipping WORK LOG means the parent can't integrate progress. Both
-are required.
+The spawn prompt carries ONLY what changes per task — the **dynamic fields** below.
+The static protocol every agent follows on every spawn (structural authority,
+escalation, context-requests, work-log format, wiki-consumption discipline) lives
+in each agent's own definition (`agents/*.md`), which is its system prompt and
+costs nothing per-spawn. **Do NOT re-paste that protocol into the spawn prompt** —
+duplicating it is the boilerplate tax this template exists to avoid. If you find
+yourself writing an `## ESCALATION` or `## STRUCTURAL AUTHORITY` block into a spawn
+prompt, stop: it's already in the agent.
 
 ```
 ## CONTEXT
 - Branch path / Worktree / Parent task / Your task (one sentence)
 - Your agent ID: <role>-<short-context>-<6char-random>
 - Your depth: <integer, root orchestrator = 0>
-- Project wiki: <repo-root>/.wiki/  (read-only unless your task includes wiki updates)
+- Project wiki: <repo-root>/.wiki/  (read only the entries cited below; see your agent def)
 
 ## ACTIVE RULES
-<verbatim contents of .wiki/rules.md from the orchestrator's cached read>
+<the GLOBAL rule subset, verbatim from the orchestrator's cached read, PLUS any
+scoped rule whose Scope matches this agent's subtree. Not the whole file if the
+whole file isn't global — see PROJECT WIKI → Active Rules.>
 
 ## RELEVANT WIKI ENTRIES
-<paths the spawning agent judged relevant; cite them in your work-log if they influenced you>
+<SECTION-level citations or short excerpts the spawning agent judged relevant —
+"architecture.md#data-flow", or a 2-4 line quote — NOT a bare "read architecture.md".
+The agent reads only these; cite them back in your work-log if they influenced you.>
 
 ## YOUR SCOPE
 <what you may touch, what you may not touch>
@@ -261,27 +305,11 @@ are required.
 - Subtree you own / You MAY decide / You MUST escalate (to your SPAWNING agent, not the user)
 - Decide freely within your mandate; a request bubbles to the nearest ancestor whose mandate covers it.
   Only the session root surfaces to the user.
-
-## STRUCTURAL AUTHORITY
-You may create/modify files only WITHIN the layout your scope names. You may NOT, on your own:
-introduce a new top-level module, move code across boundaries, establish a new cross-cutting
-pattern, rename for convention reasons, or edit .wiki/rules.md|architecture.md|conventions.md.
-If your task seems to need one, record it under `## Structural proposal` (what + why, 1-3 lines)
-and proceed with the non-structural part, or `paused_for_context` if you can't proceed.
-
-## WORK LOG
-- Your work-log: <your-worktree>/.work-log/
-- On completion, write .work-log/agents/<your-agent-id>.md per the WORK LOG format.
-
-## CONTEXT REQUESTS
-If you need info that should exist higher but isn't in your spawn context, do NOT read the
-grandparent work-log. Write your agent file with status `paused_for_context` + a
-`## Context I need` section, then exit. Your parent resolves or propagates.
-
-## ESCALATION
-If blocked/ambiguous in a way no work-log can fix (spec ambiguity, human decision needed):
-STOP, write your work-log with status `escalated` and what's blocking, then exit. Do not guess.
 ```
+
+Skipping ACTIVE RULES means the sub-agent runs without project rules; an empty or
+whole-file-dump RELEVANT WIKI ENTRIES defeats the point. Keep both tight and
+task-specific.
 
 **Mandate = scoped delegation of authority.** It is what makes "validate with the
 spawning agent, not the user" a rule instead of a hope. The relationship is

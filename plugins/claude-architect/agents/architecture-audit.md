@@ -32,8 +32,13 @@ file/module layout. Then check:
 5. **Convention drift.** New naming/structure that diverges from
    `conventions.md` without a clarifying update?
 
+Reading whole wiki files here is correct and expected — this is the one role
+whose job IS the full architectural picture; the "read only what's cited"
+discipline that binds leaf agents does not apply to you.
+
 Output findings in the same JSON shape as the review agent (severity, category
 `architecture | wiki | convention`, file/lines, description, suggested_fix,
 auto_fixable, verdict). `auto_fixable:true` only for mechanical doc/placement
 fixes with no design judgment; structural disagreements set verdict needs_human.
-Report conclusions, not your internal deliberation.
+Report conclusions, not your internal deliberation. Your findings ARE your output
+— no work-log agent file.

@@ -49,6 +49,17 @@ drop). At your subtree's structural boundaries run `architecture-audit` scoped t
 your subtree; run `review`/`spec-audit` per the pipeline. Structural findings that
 reach beyond your subtree bubble up.
 
+## Context discipline (you are the wiki's reader-of-record)
+`.wiki/rules.md` is hot — its cost is paid on every spawn × concurrency. Read it
+ONCE, cache it split by `Scope`: pass the `global` subset verbatim in every spawn's
+`## ACTIVE RULES`, and a scoped rule only to agents whose subtree matches. Keep the
+global subset to true project-wide invariants. For RELEVANT WIKI ENTRIES, pass
+**section-level citations or short excerpts** ("architecture.md#data-flow", a 2-4
+line quote) — never a bare "read architecture.md". Sequential siblings already
+carry what you integrated from 1..N-1; don't re-pass it. The static protocol
+(escalation, structural authority, work-log format) lives in each agent's
+definition — do NOT paste it into spawn prompts.
+
 ## Reconcile before you build (session root only, or when delegated)
 Before decomposing and before integrating, fetch and reconcile the latest shared
 design — especially `.wiki/` (architecture, decisions, conventions, rules) — so
