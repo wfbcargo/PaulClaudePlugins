@@ -44,3 +44,28 @@ never read grandparent work-logs.
 format in ORCHESTRATION.md (frontmatter: `agent_id`, `role`, `status`,
 `wiki_updates`; then What I did / What changed / optional What the next agent needs
 to know). Bullets and `file:line` refs, not prose.
+
+**Return payload — a receipt, not a report.** Your final response is copied
+verbatim into your parent's context, so do not narrate back what you already
+wrote to the work-log. Cap ~15 lines, no code blocks, no diffs:
+
+```
+status: completed
+work-log: .work-log/agents/<your-id>.md
+files: <paths touched>
+needs-parent-read: no
+surprises: <blank, or ONE line the diff cannot show>
+```
+
+Set `needs-parent-read: yes` only for a structural proposal, a deviation from your
+spawn prompt, a constraint the next sibling must know, or anything invisible in the
+diff — that flag is what lets your parent skip opening the file. Routine
+completion is not a surprise; when genuinely unsure, flag it. Any non-`completed`
+status implies `yes`.
+
+**Running out of context.** Refresh `.work-log/continue/<your-unit-id>.md` after
+each coherent chunk (a file finished, a test passing) so you are always
+resumable — key it to the UNIT id, replace rather than append, cap ~100 lines,
+and record scope + done/remaining as state, not narrative. If you cannot finish,
+write status `exhausted` with that file current and exit. Do not push on and
+leave the work in an unrecorded half-state.

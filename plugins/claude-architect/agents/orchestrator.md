@@ -82,6 +82,54 @@ carry what you integrated from 1..N-1; don't re-pass it. The static protocol
 (escalation, structural authority, work-log format) lives in each agent's
 definition — do NOT paste it into spawn prompts.
 
+Context also flows UP into you, and that is the inflow that kills long runs.
+Two rules:
+
+- **Trust the receipt.** A child returns a ~15-line receipt, not a report. If it
+  says `status: completed` and `needs-parent-read: no`, integrate and squash-merge
+  WITHOUT opening its work-log. Only a non-`completed` status or a non-empty
+  `surprises` line earns a file read. Opening every child's work-log by reflex
+  spends your context on information the diff already carries.
+- **Never take output you can't bound.** Do not run full test suites, `git diff`
+  of a squash merge, or lint over a whole tree in your own context. Redirect to
+  `.work-log/out/<n>.log` and read the tail, grep for failures, or hand the
+  verification to a leaf that returns pass/fail plus failing test names. Same for
+  review findings: read the `verdict` and a findings index, not every
+  `suggested_fix` body — the `fix` agents read their own findings themselves.
+
+## Checkpoint your resume state (continue files)
+You cannot measure your remaining context and nothing will warn you in time, so
+do not wait for exhaustion. Write/refresh `.work-log/continue/<your-unit-id>.md`
+at EVERY structural boundary: after integrating a child, before each spawn batch,
+after each squash-merge. Contents: your mandate and scope VERBATIM, your
+decomposition with each sub-unit's owner-role assignment, done / in-flight /
+not-started, open escalations. State, not story — no narrative, no reasoning, no
+history of attempts. Cap ~100 lines and REPLACE the file each time; never append.
+
+Key it to the unit id, not your agent id — your successor is a different agent.
+If you are the SESSION ROOT, your continue file lives in the repo-root
+`.work-log/`, never inside a child worktree (`git worktree remove` would destroy
+it). `QUEUE.md` + `.wiki/` + that file must be enough to restart you cold.
+
+If YOU are running out of room: finish the sub-unit in flight, refresh the
+continue file, return `status: exhausted` to your spawning agent, and exit. Do
+not start work you cannot finish.
+
+## When a child returns `exhausted`
+Default: **re-decompose that unit into two smaller children.** Continuation is
+recovery, not a scaling strategy — respawning the same oversized unit with its
+continue file just moves the wall. Resume from the continue file only when the
+work genuinely cannot be split (a long sequential refactor), and never past
+MAX_CONTINUATIONS (3); at the cap, re-decompose or escalate. A resumed child gets
+its continue file path in its spawn prompt plus its continuation number.
+
+## Your own return payload
+Unless you are the session root, your final response goes verbatim into YOUR
+parent's context. Return the same ~15-line receipt your children return you —
+status, work-log path, files, `needs-parent-read`, and at most one line of
+surprises. Your subtree's detail belongs in your work-log, not in your parent.
+(The session root is the exception: it reports to the user, in prose.)
+
 ## Reconcile before you build (session root only, or when delegated)
 Before decomposing and before integrating, fetch and reconcile the latest shared
 design — especially `.wiki/` (architecture, decisions, conventions, rules) — so

@@ -15,6 +15,32 @@ artifact (a branch, a spec file, a work-log entry) that an isolated agent can re
 
 ---
 
+## PROCEDURES (read at the moment named, not up front)
+
+What stays in this document is **always-on discipline**: the rules that shape
+every decision whether or not you notice them. What lives below is
+**at-a-moment procedure** — read it when its trigger fires, and not before. The
+trigger is the resident part; the steps are not.
+
+| Read | When |
+|------|------|
+| `docs/procedures/review-loop.md` | About to open a PR for a top-level unit |
+| `docs/procedures/spawn-child-orchestrator.md` | Handing a sub-unit to an orchestrator, especially with parallel siblings |
+| `docs/procedures/state-reconciliation.md` | Session start, after a crash, or the tree feels off |
+| `docs/procedures/multi-session.md` | More than one session is running on this repo |
+| `docs/procedures/headless.md` | `CLAUDE_HEADLESS=1` |
+| `docs/model-routing.md` | Remapping model tiers, or after a classifier refusal |
+
+Mechanical git recipes are `scripts/`, not prose — invoke them rather than
+reconstructing the commands:
+
+| Script | Does |
+|--------|------|
+| `scripts/new-worktree.sh <tier> <slug> [parent]` | Dirty-check, id, branch, worktree, `[target:]` commit, work-log dirs. Prints `branch=` / `worktree=` / `unit_id=` / `target=`. |
+| `scripts/squash-up.sh <branch> <msg> [--keep-worktree]` | Squash into the derived parent, commit, remove worktree, delete branch. Exits 2 on conflict having committed nothing. |
+
+---
+
 ## TUNING
 
 | Knob | Default | Meaning |
@@ -24,6 +50,7 @@ artifact (a branch, a spec file, a work-log entry) that an isolated agent can re
 | `MAX_CONCURRENT_AGENTS` | 20 | Sub-agents alive at once across all worktrees |
 | `MAX_CONTEXT_REQUEST_DEPTH` | 4 | Hops a `paused_for_context` request may propagate up before escalating |
 | `MAX_ORCHESTRATOR_DEPTH` | 4 | Nested orchestrator levels before forcing flatten/escalate (guard-band under the runtime nested-subagent cap of 5) |
+| `MAX_CONTINUATIONS` | 3 | Times one unit may be resumed from a continue file before the decomposition is declared wrong |
 
 Override per-project in `.claude/settings.json`.
 
@@ -246,55 +273,36 @@ merges, review, PR).
 
 ### Universal merge rule
 
-Squash-merge into parent. Parent = current branch with the last `--` segment
-stripped:
+Squash-merge into parent, where parent = the branch with its last `--` segment
+stripped. Implementation → squash into spec. Spec (child of epic) → squash into
+epic. Spec (standalone) and Epic → PR into the active branch (the manual review
+checkpoint).
 
-```bash
-CURRENT=$(git branch --show-current)
-MERGE_TARGET="${CURRENT%--*}"
+### Creating and closing units
+
+```
+scripts/new-worktree.sh spec my-feature            # → branch= worktree= unit_id= target=
+scripts/new-worktree.sh impl phase-one "<spec-branch>"   # parent is the 3rd arg
+scripts/squash-up.sh "<branch>" "spec: <desc> [spec-id: <id>]"
 ```
 
-Implementation → squash into spec. Spec (child of epic) → squash into epic. Spec
-(standalone) and Epic → PR into the active branch (the manual review checkpoint).
+**Pass the parent branch explicitly for any non-top-level unit.** Omitting it
+forks the new branch from whatever HEAD the shell happens to be on rather than
+from the unit's actual parent — silent, and it only surfaces at merge time.
 
-### Creating a worktree
+`new-worktree.sh` refuses on a dirty tree — that refusal is a stop-and-ask, not
+something to work around. It records `[target: <branch>]` in the initial commit
+of every top-level branch, which the PR step reads back to find the merge target.
 
-```bash
-git status                                   # if dirty, stop and ask the user
-ACTIVE_BRANCH=$(git branch --show-current)
-SPEC_ID=$(openssl rand -hex 4)
-SPEC_BRANCH="${ACTIVE_BRANCH}--spec/${SPEC_ID}_<spec-name>"
-mkdir -p .worktrees
-git worktree add ".worktrees/${SPEC_BRANCH##*/}" -b "${SPEC_BRANCH}"
-git -C ".worktrees/${SPEC_BRANCH##*/}" commit --allow-empty \
-  -m "spec: Start <n> [target: ${ACTIVE_BRANCH}] [spec-id: ${SPEC_ID}]"
-mkdir -p ".worktrees/${SPEC_BRANCH##*/}/.work-log/agents"
-```
+Integrate the child work-log BEFORE `squash-up.sh` — removing the worktree
+destroys it. (If the child's receipt said `needs-parent-read: no`, there is
+nothing to integrate; call straight through.) On conflict the script exits 2
+having committed nothing: report the conflicting paths and ask "resolve and
+proceed, or abort?" Never resolve silently.
 
-Record `[target: <branch>]` in the initial commit of every top-level branch —
-the PR-creation step reads it to find the merge target. Use
-`git -C .worktrees/<name> <cmd>` rather than `cd`-ing in.
-
-### On successful completion (squash up)
-
-Integrate the child work-log BEFORE removing the worktree (removal destroys it),
-then:
-
-```bash
-git -C "${PARENT_WT}" merge --squash "${CURRENT}"
-git -C "${PARENT_WT}" commit -m "<tier>: <description> [<entity>-id: <id>]"
-git worktree remove ".worktrees/${CURRENT##*/}" 2>/dev/null || true
-git branch -D "${CURRENT}"
-```
-
-Every branch created MUST be deleted after squash-merge or PR merge. No stale
-branches. `.worktrees/` and `.work-log/` are gitignored; `.wiki/` is NOT — it's
-committed.
-
-### Squash-merge conflicts
-
-Don't abort silently. Report the conflicting files and ask: "Resolve and proceed,
-or abort?" Only proceed if told to.
+Every branch created MUST be deleted after squash-merge or PR merge — no stale
+branches. Use `git -C .worktrees/<name> <cmd>` rather than `cd`-ing in.
+`.worktrees/` and `.work-log/` are gitignored; `.wiki/` is NOT — it's committed.
 
 ---
 
@@ -309,13 +317,14 @@ duplicating it is the boilerplate tax this template exists to avoid. If you find
 yourself writing an `## ESCALATION` or `## STRUCTURAL AUTHORITY` block into a spawn
 prompt, stop: it's already in the agent.
 
-```
-## CONTEXT
-- Branch path / Worktree / Parent task / Your task (one sentence)
-- Your agent ID: <role>-<short-context>-<6char-random>
-- Your depth: <integer, root orchestrator = 0>
-- Project wiki: <repo-root>/.wiki/  (read only the entries cited below; see your agent def)
+**Field order is load-bearing — do not rearrange it.** Prompt caching works on
+prefixes: shared bytes at the FRONT cache across spawns, and everything after the
+first differing byte is cold. `ACTIVE RULES` is byte-identical across every spawn
+in a session and `RELEVANT WIKI ENTRIES` is often shared across siblings in a
+subtree, so both precede the per-agent fields. Leading with `CONTEXT` (unique
+agent ID, worktree, task) would make every sibling spawn cold from its first line.
 
+```
 ## ACTIVE RULES
 <the GLOBAL rule subset, verbatim from the orchestrator's cached read, PLUS any
 scoped rule whose Scope matches this agent's subtree. Not the whole file if the
@@ -326,6 +335,12 @@ whole file isn't global — see PROJECT WIKI → Active Rules.>
 "architecture.md#data-flow", or a 2-4 line quote — NOT a bare "read architecture.md".
 The agent reads only these; cite them back in your work-log if they influenced you.>
 
+## CONTEXT
+- Branch path / Worktree / Parent task / Your task (one sentence)
+- Your agent ID: <role>-<short-context>-<6char-random>
+- Your depth: <integer, root orchestrator = 0>
+- Project wiki: <repo-root>/.wiki/  (read only the entries cited above; see your agent def)
+
 ## YOUR SCOPE
 <what you may touch, what you may not touch>
 
@@ -333,76 +348,34 @@ The agent reads only these; cite them back in your work-log if they influenced y
 - Subtree you own / You MAY decide / You MUST escalate (to your SPAWNING agent, not the user)
 - Decide freely within your mandate; a request bubbles to the nearest ancestor whose mandate covers it.
   Only the session root surfaces to the user.
+
+## RESUMING  (include ONLY when respawning a unit that returned `exhausted`)
+- Continue file: .work-log/continue/<unit-id>.md — read it FIRST; it is your state.
+- Continuation <n> of MAX_CONTINUATIONS. Refresh that same file; do not start a new one.
 ```
 
 Skipping ACTIVE RULES means the sub-agent runs without project rules; an empty or
 whole-file-dump RELEVANT WIKI ENTRIES defeats the point. Keep both tight and
 task-specific.
 
+The same prefix logic is why the static protocol belongs in the agent definition
+rather than the spawn prompt: an agent def is identical across all spawns of that
+role, so it caches from the second spawn onward, while a spawn prompt is unique
+and cold every time. Bloating the agent def is far cheaper than bloating the
+spawn prompt — which is the opposite of the intuition that a system prompt paid
+20× must be the expensive one.
+
 **Mandate = scoped delegation of authority.** It is what makes "validate with the
 spawning agent, not the user" a rule instead of a hope. The relationship is
 identical at every tier — leaf ⊂ child-orchestrator ⊂ session-root ⊂ user — so the
 user is simply the root mandate-holder.
 
-### Worked example: spawning a CHILD ORCHESTRATOR
-
-The template above is tier-agnostic, but a child-orchestrator spawn carries four
-things a leaf spawn does not: **its depth**, **its sibling isolation**, **the
-seams it owns vs. consumes**, and **explicit permission to decompose further**.
-Condensed from a real run (`spec 7e0e8fb3`, an epic's API-surface spec split into
-three phase groups, each handed to its own orchestrator at depth 1):
-
-```
-## CONTEXT
-- Worktree: <abs path>/.worktrees/4b5455cc_log-read-surface — you and your leaves
-  work ONLY here. Absolute paths; never `cd` into another worktree.
-- Branch: main--epic/9f319748_public-market-study--spec/7e0e8fb3_api-surface--impl/4b5455cc_log-read-surface
-- Parent task: spec 7e0e8fb3 — the public API surface. I am the session root and
-  your spawning agent; validate with me, not the user.
-- Your task: the event log and the entire read surface — acceptance criteria 2, 3, 5.
-- Your agent ID: orchestrator-log-read-c4e802
-- Your depth: 1 (your leaves are depth 2; the cap is 4)
-- Project wiki: <worktree>/.wiki/ — read only what is cited below, and pass your
-  leaves only what each one needs.
-
-**A sibling orchestrator is running in parallel** on .worktrees/9d5d5653_admission-lifecycle
-(Phase 3 — queue, admission, cancel). You cannot see each other and must not try.
-The file split below is what keeps you apart.
-
-## ACTIVE RULES
-<global subset verbatim, plus scoped rules matching this subtree>
-
-## RELEVANT WIKI ENTRIES
-<section-level citations — the child re-cites a subset to each of its own leaves>
-
-## YOUR SCOPE
-**You own, exclusively:** <file/dir list>
-**You must NOT touch:** <the sibling's files, shared packages>
-**<shared file> is the one real collision risk.** Keep changes there purely
-additive and minimal — do not restructure. I resolve the merge.
-
-## THE SEAM WITH <sibling> — build this, they consume it
-<the interface, and: keep it tiny and stable. If you conclude it must change
-shape, escalate to me rather than redefining it — the sibling is building against
-it right now and cannot see you.>
-
-## MANDATE
-**You may decide freely:** <the subtree's internal structure> — including **your
-leaf decomposition and how many leaves**.
-**You MUST escalate to me:** anything touching <shared surface>; any unsettled
-spec conflict; a change to the seam above; a defect finding beyond your assigned scope.
-
-**Decompose and spawn.** You are an orchestrator: spawn `implementation` leaves,
-each with its own ACTIVE RULES slice, its own cited wiki entries, and a scope that
-does not overlap its siblings. Leaves are terminal. Spawn a child orchestrator of
-your own per the defaults in your agent definition.
-```
-
-Note what makes it work: the parent partitions **files**, not just tasks; names
-the one shared file and reserves the merge for itself; makes the cross-sibling
-interface an escalation trigger; and states outright that leaf decomposition is
-the child's call. That last line is what actually transfers authority — without
-it, a child orchestrator tends to do the work itself.
+**Spawning a child orchestrator** carries four things a leaf spawn does not: its
+depth, its sibling isolation, the seams it owns vs. consumes, and explicit
+permission to decompose further. Read
+`docs/procedures/spawn-child-orchestrator.md` before writing that prompt —
+especially when siblings will run in parallel, since the parent must partition
+*files*, not just tasks.
 
 ---
 
@@ -430,22 +403,10 @@ Three read-only audit lenses, each answering a different question:
   boundaries, dependency direction), and is the wiki still TRUE? Runs at
   structural boundaries only, which is what keeps it cheap.
 
-### Review Agent loop
-
-1. Tag a pre-review anchor (`git tag review-iN-pre`) for rollback.
-2. Spawn a read-only `review` agent → iteration JSON.
-3. Triage the verdict: `clean` → exit; `needs_human` → escalate, show the human
-   an uncontaminated report, apply NO auto-fixes; `needs_fixes` → step 4;
-   `ITERATION >= MAX_REVIEW_ITERATIONS` → escalate ("did not converge").
-4. Group findings by locality; per group spawn a `fix` agent in an `--additional/`
-   worktree with write access only to its own worktree. Squash each back, re-run
-   tests + lint, return to step 1 for iteration N+1.
-5. Clean exit: delete review tags, remove `.review/`, proceed to PR.
-
-`auto_fixable: true` requires a mechanical, unambiguous fix with no new product,
-architecture, or security decision. Anything involving spec disagreement,
-ambiguity, architectural tradeoffs, or a security finding without an obvious
-mitigation sets the verdict to `needs_human`.
+Before opening a PR for a top-level unit, run the full Review Agent loop —
+steps in `docs/procedures/review-loop.md`. Never load a findings file whole:
+verdict from the agent's receipt, index for grouping, bodies only inside the
+`fix` agents.
 
 ---
 
@@ -463,13 +424,31 @@ knowledge goes to `.wiki/`, not here.
 ├── QUEUE.md          # Top-level only. Sole writer: top-level orchestrator.
 ├── INDEX.md          # Only if pages/ is non-empty.
 ├── pages/<topic>.md  # Only if an agent has structured knowledge a future agent will read.
-└── agents/<agent-id>.md   # Sole writer: that sub-agent only.
+├── agents/<agent-id>.md    # Sole writer: that sub-agent only.
+└── continue/<unit-id>.md   # Resume state for a unit. Sole writer: the agent currently owning it.
 ```
 
 **Single-writer per file** — no two agents ever write the same file, so no locks.
 Most worktrees only ever have `agents/`. Audience is AI: bullets, fragments,
 `file:line` refs, code snippets. No prose, no narration, no "last updated"
 metadata.
+
+### The three memory types
+
+Everything an agent writes is one of exactly three things. Pick by **who writes,
+who reads, when it dies** — never by topic. If a note doesn't fit a row, it's
+probably a note that shouldn't be written.
+
+| Type | Writer | Reader | Dies |
+|------|--------|--------|------|
+| `.wiki/**` | any agent | every future agent, and humans | never (committed) |
+| `.work-log/agents/<id>.md` | one child | its parent, at integration | with the worktree |
+| `.work-log/continue/<unit>.md` | the agent owning a unit | that unit's **successor agent** | when the unit completes |
+
+Continue files are the odd one: addressed sideways in time rather than upward,
+they must outlive their writer but die before the worktree does. Do not use one
+where a work-log agent file belongs — parents read `agents/`, successors read
+`continue/`.
 
 ### Per-agent file
 
@@ -479,8 +458,9 @@ Written once at end of work, before squash-merge:
 ---
 agent_id: <full ID>
 role: implementation | review | fix | merge | other
-status: completed | escalated | failed | paused_for_context
+status: completed | escalated | failed | paused_for_context | exhausted
 wiki_updates: <list of .wiki/ paths touched, or "none">
+continuation: <n>            # omit unless this agent resumed from a continue file
 ---
 # <one-line summary>
 ## What I did
@@ -492,14 +472,96 @@ wiki_updates: <list of .wiki/ paths touched, or "none">
 the diff; not durable enough for .wiki/ (if durable, put it there); <10 lines.>
 ```
 
+### Return payload contract (the receipt)
+
+A sub-agent's final response is returned to its parent **verbatim**, so it is
+parent context whether or not the parent needs it. Writing a work-log file and
+*also* narrating the same content back is paying twice and defeats the entire
+disk-based channel.
+
+**Your final response is a receipt pointing at your work-log, not a report.**
+Hard cap ~15 lines, no code blocks, no diffs, no restatement of the work:
+
+```
+status: completed
+work-log: .work-log/agents/<your-id>.md
+files: <paths touched, one line>
+needs-parent-read: no        # yes ONLY if the line below is non-empty
+surprises: <blank, or ONE line: what happened that the diff does not show>
+```
+
+The savings exist **only because the parent can then decline to open the file.**
+`status: completed` + `needs-parent-read: no` means the parent integrates and
+merges without reading anything. So `surprises` is the load-bearing field: set
+`needs-parent-read: yes` for a structural proposal, a deviation from the spawn
+prompt, a discovered constraint the next sibling must know, or anything the diff
+cannot show. Routine completion is not a surprise. Over-flagging costs the
+parent its context; under-flagging costs correctness — when genuinely unsure,
+flag it.
+
+Non-`completed` statuses (`escalated`, `failed`, `paused_for_context`,
+`exhausted`) always imply `needs-parent-read: yes`.
+
+### Continue files (resuming a unit that ran out of room)
+
+An agent cannot measure its own remaining context, and a parent cannot observe a
+running child's at all — there is no polling, no interrupt, no handle. So
+continuation is **never detected**; it is prepared for continuously.
+
+**Checkpoint rule.** An agent owning a unit writes/refreshes
+`.work-log/continue/<unit-id>.md` at every structural boundary: after integrating
+a child, before each spawn batch, after each squash-merge. The file is therefore
+always current, and a compaction, crash, or kill lands in an already-recoverable
+state instead of losing the mandate.
+
+**Contents — state, not story.** The mandate and scope **verbatim** (this is
+precisely what compaction destroys), the decomposition with its per-sub-unit
+owner-role assignments, done / in-flight / not-started, and open escalations.
+No narrative, no reasoning, no history of what was tried. Cap ~100 lines: if
+the unit's state doesn't fit, the unit was scoped too large.
+
+**Replace, never append.** A continue file that grows rebuilds the original
+problem one level down. Each successor overwrites it.
+
+**Key it to the unit, not the agent.** The reader is a *different* agent than the
+writer, so `<unit-id>` (the spec/impl 8-hex id) is the stable handle;
+`<agent-id>` is not.
+
+**Location matters.** An orchestrator's continue file lives in the `.work-log/`
+of the worktree it will still exist in after the resume. The session root's
+belongs at the **repo root** `.work-log/`, never inside a child worktree —
+`git worktree remove` would delete the very file the resume depends on.
+`.work-log/` is gitignored, so continue files are excluded from commits for free.
+
+**Continuation is recovery, not a scaling strategy.** When a child returns
+`status: exhausted`, the parent's default is to **re-decompose the unit into two
+smaller children**, not to respawn it with its continue file. Resuming is the
+fallback for work that genuinely cannot be split (a long sequential refactor).
+Anything else papers over a decomposition that was wrong at spawn time.
+
+**Cap the chain at `MAX_CONTINUATIONS` (3).** Continuation N+1 is written from a
+context that already contained continuation N, so fidelity decays with every hop.
+Hitting the cap is not a signal to allow a fourth — it means the unit must be
+re-decomposed or escalated. The session root is the exception with no parent to
+re-decompose it: for the root, resuming from its continue file IS the mechanism,
+and `QUEUE.md` + `.wiki/` + the root continue file must together be sufficient to
+restart cold.
+
 ### Integration (the bubble-up)
 
-When a sub-agent's branch is about to squash-merge, the parent reads
+When a sub-agent's branch is about to squash-merge, the parent decides from the
+child's **receipt** whether to open its work-log at all. `status: completed` with
+`needs-parent-read: no` → integrate and merge without reading; that skip is where
+the context saving actually lives. Otherwise the parent reads
 `agents/<child-id>.md` (and the child's `pages/` if any) BEFORE removal and makes
 a judgment per item: **absorb** into its own notes (default), **lift** a
 substantial page into its own `pages/`, **promote** durable project-scoped
 knowledge to `.wiki/`, or **discard** (the diff already captures it). Then it
 appends one line to its own agent file: `integrated <child-id>: <outcome>`.
+
+A child's `continue/` files are never integrated upward — they are addressed to
+that unit's own successor and die with the completed unit. A parent reads a
+child's continue file in exactly one case: it is respawning that unit.
 
 Siblings benefit from each other's completed work *through the parent*, never by
 reading each other directly. Sequential siblings benefit naturally: by the time
@@ -521,49 +583,27 @@ normal `escalated`, not a context request.
 
 ---
 
-## STATE RECONCILIATION
+## OPERATING CONDITIONS
 
-Long multi-agent runs desync git, the wiki, and worktree state. At session start,
-after a crash, or when something feels off, spawn the read-only `state-doctor` to
-detect drift: orphan worktrees/branches, wiki spec entries whose branch no longer
-exists, stale `review-iN-pre` tags, stale `.review/`/`.work-log/` in merged
-worktrees, rules with broken `Source:` links, dangling `paused_for_context`
-agents. The doctor **proposes** fixes and the user confirms; it never executes
-destructive ops and never deletes wiki entries (only reports `status:` updates).
+Three conditions change how you run. Recognising them is resident; the procedure
+for each is not.
 
----
+**Drift.** Long multi-agent runs desync git, the wiki, and worktree state. At
+session start, after a crash, or when something feels off, spawn the read-only
+`state-doctor` → `docs/procedures/state-reconciliation.md`. It proposes, the user
+confirms; it never executes destructive ops and never deletes wiki entries.
 
-## CROSS-SESSION RECONCILIATION
+**Parallel sessions.** If more than one session is running on this repo, only the
+session root reconciles against shared state, and structural conflicts between
+sessions are the user's call, not a session's →
+`docs/procedures/multi-session.md` (also the `decisions/<NNNN>` and `R-NNN`
+numbering rule, which matters even single-session).
 
-If you run multiple sessions in parallel on one project (e.g. one per terminal
-tab), only the **session root** reconciles against shared state — child
-orchestrators work within the design their root has reconciled. At session start,
-before each top-level integration, and before any structural decision:
-`git fetch` the integration branch and reconcile the latest `.wiki/` into the
-working design. Build on current reality, not a stale snapshot. Changes to shared
-surfaces (top-level architecture, cross-cutting conventions) escalate to the user
-— cross-session structural arbitration is the user's mandate, not a session's.
+**Headless.** When `CLAUDE_HEADLESS=1` there is no human to prompt: escalations
+become files and the queue keeps moving → `docs/procedures/headless.md`. This is
+the condition the checkpoint rule exists for, since nobody is watching to restart
+an exhausted root.
 
-**Shared-namespace numbering.** Globally-sequential `decisions/<NNNN>` filenames
-and `R-NNN` rule IDs collide when parallel sessions each grab "the next integer."
-Prevent it by partitioning the number space per session: assign each concurrent
-session a distinct hundred-block (session 1 → `0100`s / `R-100`s, session 2 →
-`0200`s / `R-200`s, …), recorded in the opening commit trailer. The serial low
-range `0001–0099` is the single-session default. Numbers are then globally unique
-by construction, so the integrator never renumbers at merge. Index/list conflicts
-are keep-all: order by number, never drop a side.
-
----
-
-## HEADLESS OPERATION
-
-When `CLAUDE_HEADLESS=1`, there is no human to prompt. Escalations and refusals
-write `.review/HUMAN_REVIEW_NEEDED.md` (or `MERGE_CONFLICT_NEEDS_HUMAN.md`) with
-the branch path and what's blocking, then the orchestrator moves to the next
-`QUEUE.md` item. The session ends cleanly when the queue is empty and no
-sub-agents are running. The user's primary signal next morning is the git log of
-squash-merges plus any escalation files — the work-log itself is internal.
-
-If a top-tier agent hits a safety-classifier refusal, treat it exactly like an
-`escalated` status; never silently re-submit the identical prompt (it will refuse
-again). See `docs/model-routing.md` → MODEL FALLBACK & REFUSALS.
+A safety-classifier refusal on a top-tier agent is an `escalated` status, never a
+silent retry of the identical prompt — see `docs/model-routing.md` → MODEL
+FALLBACK & REFUSALS.

@@ -42,3 +42,18 @@ auto_fixable, verdict). `auto_fixable:true` only for mechanical doc/placement
 fixes with no design judgment; structural disagreements set verdict needs_human.
 Report conclusions, not your internal deliberation. Your findings ARE your output
 — no work-log agent file.
+
+Write that JSON to the report path your spawn prompt names, then **return a
+receipt, not the findings** — your final response goes verbatim into the
+orchestrator's context, and you read whole wiki files, so you are the agent most
+able to flood it. Return only:
+
+```
+verdict: clean | needs_fixes | needs_human
+report: <path>
+findings: <n> (architecture <n>, wiki <n>, convention <n>) — auto_fixable <n>
+blocking: <blank, or ONE line naming the structural issue that must be decided>
+```
+
+The orchestrator reads the file when it needs detail. Do not paste findings,
+layout listings, or wiki excerpts into the response.

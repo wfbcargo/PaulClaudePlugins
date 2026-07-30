@@ -26,9 +26,20 @@ installed:
 | `merge` | Resolves PR conflicts preserving both sides' intent (real merge commits). |
 | `state-doctor` | Read-only reconciliation: detects git / wiki / worktree drift. |
 
-**The methodology that ties them together** — [`ORCHESTRATION.md`](./ORCHESTRATION.md):
-work taxonomy, branch naming, the mandatory spawn template, the review pipeline,
-the AI-to-AI work-log protocol, state reconciliation, and headless operation.
+**The methodology that ties them together** — [`ORCHESTRATION.md`](./ORCHESTRATION.md).
+This is the always-on layer: work taxonomy, branch naming, the mandatory spawn
+template, the review boundaries, the three memory types, and the receipt and
+continue-file contracts that keep orchestrator context bounded. It is meant to be
+resident in your `CLAUDE.md`, so it carries only what shapes every decision.
+
+**At-a-moment procedures** — [`docs/procedures/`](./docs/procedures/): the review
+loop, child-orchestrator spawns, state reconciliation, parallel sessions, and
+headless operation. Each is read when its trigger fires and not before; the
+triggers stay resident in `ORCHESTRATION.md`.
+
+**Mechanical git recipes** — [`scripts/`](./scripts/): `new-worktree.sh` and
+`squash-up.sh`. Prose the orchestrator has to reconstruct is both expensive and
+error-prone, so the branch/worktree/squash sequences are scripts it invokes.
 
 **Supporting docs**: [`docs/model-routing.md`](./docs/model-routing.md) (tiering,
 fallback, and how to remap models to what you have) and a `.wiki/` starter
@@ -51,12 +62,30 @@ whole model at once.
   branch. Branch names are `--`-separated by tier (`…--spec/<id>_name--impl/<id>_phase`)
   so parent and child branches never collide as filesystem paths, and the branch
   name *is* the documentation of where the work sits.
-- **Committed wiki vs. ephemeral work-log.** `.wiki/` is durable, human-readable,
-  committed project memory. `.work-log/` is per-worktree AI-to-AI scratch paper,
-  stripped before the PR. Single-writer-per-file means no locks.
+- **Three kinds of memory, chosen by lifecycle — not by topic.** `.wiki/` is
+  durable, human-readable, committed project memory. `.work-log/agents/` is
+  per-worktree scratch a child writes for its parent, stripped before the PR.
+  `.work-log/continue/` is resume state an agent writes for *its own successor*,
+  keyed to the unit rather than the agent. Single-writer-per-file means no locks.
+- **Context is a budgeted resource, not a virtue.** A child's final message is
+  copied verbatim into its parent, so children return a ~15-line *receipt*
+  pointing at their work-log rather than narrating it back — and the parent skips
+  opening the file entirely when the receipt says there's nothing the diff hides.
+  Orchestrators never take output they can't bound (no full test suites or squash
+  diffs in the manager's context). Since no agent can measure its own remaining
+  context and no parent can observe a running child's, exhaustion is never
+  detected: continue files are refreshed at every structural boundary, so a
+  compaction or crash lands somewhere already recoverable.
 - **Mandate-based escalation.** Every spawn carries a written mandate: what it may
   decide, what it must escalate. Requests bubble to the nearest ancestor whose
   mandate covers them; only the session root ever surfaces to the user.
+- **Resident vs. on-demand, split by trigger.** Always-on discipline stays in
+  `ORCHESTRATION.md`; procedures move to `docs/procedures/` and are read when
+  their trigger fires. The trigger is always the resident half — guidance you
+  have to fetch gets followed less reliably than guidance that is simply there,
+  so only things needed at a *recognizable moment* get demoted. Spawn-prompt
+  field order is invariant-first for the same reason it matters: prompt caching
+  works on prefixes, so the bytes shared across sibling spawns go at the front.
 
 ## Install
 
@@ -72,7 +101,7 @@ Tune the model IDs in `agents/*.md` to your access — see `docs/model-routing.m
 
 ## Status
 
-`0.1.2`. Extracted from a real project's `.claude/` setup. The agents and the
+`0.2.0`. Extracted from a real project's `.claude/` setup. The agents and the
 protocol are what the author actually runs; the model tiers are pinned to the
 *design* (top tier orchestrates, bounded tier executes) and are meant to be
 remapped to whatever models you have.

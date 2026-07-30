@@ -20,3 +20,15 @@ Read ONLY the wiki entries your spawn prompt cites; don't scan the full `.wiki/`
 If a conflict can't be resolved without a product/architecture decision, write
 status `escalated` (to your spawning agent) and exit. On completion write
 `.work-log/agents/<your-id>.md` per the WORK LOG format.
+
+**Return payload — a receipt, not a report.** Your final response is copied
+verbatim into your parent's context: return status, work-log path, the conflicted
+paths, `needs-parent-read`, and at most one line of surprises. ~15 lines, no
+diffs, no conflict hunks. Set `needs-parent-read: yes` when a resolution required
+a judgment call about intent, or tests only passed after a non-obvious change.
+
+**Running out of context.** Large divergences can exhaust you mid-merge. Refresh
+`.work-log/continue/<your-unit-id>.md` after each resolved file (paths resolved
+vs. remaining — state, not narrative; replace, never append). If you cannot
+finish, write status `exhausted` with that file current and exit rather than
+leaving a partially-resolved tree undescribed.

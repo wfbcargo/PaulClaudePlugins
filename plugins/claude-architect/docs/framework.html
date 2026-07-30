@@ -521,7 +521,7 @@
             decide alone and what it must escalate. The standing protocol lives in the agent
             definition, so it costs nothing per spawn.
           </p>
-          <p class="artifact"><b>Emits</b> <code>CONTEXT · ACTIVE RULES · RELEVANT WIKI ENTRIES · YOUR SCOPE · MANDATE</code></p>
+          <p class="artifact"><b>Emits</b> <code>ACTIVE RULES · RELEVANT WIKI ENTRIES · CONTEXT · YOUR SCOPE · MANDATE</code> — invariant fields first, so sibling spawns share a cacheable prefix</p>
         </div>
       </div>
 
@@ -542,10 +542,11 @@
         <div class="stage-body">
           <h3>Integrate, then squash up</h3>
           <p>
-            Before a worktree is removed, the parent reads the child's work-log and rules on each
-            item: absorb it, lift it into its own pages, promote it to the committed wiki, or discard
-            it because the diff already says it. Then the branch squashes into its parent and is
-            deleted. Top-level units open a PR — the human checkpoint.
+            Before a worktree is removed, the parent decides from the child's receipt whether to open
+            its work-log at all — a clean completion with nothing the diff hides is merged unread.
+            When it does read, it rules on each item: absorb it, lift it into its own pages, promote
+            it to the committed wiki, or discard it because the diff already says it. Then the branch
+            squashes into its parent and is deleted. Top-level units open a PR — the human checkpoint.
           </p>
           <p class="artifact"><b>Emits</b> one squash commit per unit, plus any durable knowledge promoted to <code>.wiki/</code></p>
         </div>
@@ -789,7 +790,7 @@
   </section>
 
   <section>
-    <h2>Two kinds of memory</h2>
+    <h2>Three kinds of memory</h2>
     <div class="pairs">
       <div class="pair">
         <span class="kicker">committed · durable</span>
@@ -808,6 +809,27 @@
           AI-to-AI scratch paper, one directory per worktree. Not documentation, not for humans —
           bullets, file:line refs, fragments. Single-writer per file, so no locks are ever needed. It
           dies with its worktree, and the top-level log is deleted before the PR is pushed.
+        </p>
+      </div>
+      <div class="pair">
+        <span class="kicker">gitignored · addressed to your successor</span>
+        <h3>.work-log/continue/</h3>
+        <p>
+          Resume state for one unit of work, keyed to the unit rather than the agent — because the
+          reader is the <em>next</em> agent to own it. An agent cannot measure its remaining context
+          and a parent cannot observe a running child's at all, so exhaustion is never detected: the
+          file is refreshed at every structural boundary and is therefore always current when a
+          compaction, crash or kill lands. State, not story; replaced, never appended.
+        </p>
+      </div>
+      <div class="pair">
+        <span class="kicker">point, don't paste</span>
+        <h3>Receipts</h3>
+        <p>
+          A child's final message is copied verbatim into its parent, so writing a work-log
+          <em>and</em> narrating it back pays twice. Children return ~15 lines — status, work-log
+          path, files, and one flag for anything the diff cannot show. The saving is real only
+          because that flag lets the parent decline to open the file at all.
         </p>
       </div>
       <div class="pair">
@@ -846,6 +868,7 @@
           <tr><td class="knob">MAX_CONCURRENT_AGENTS</td><td class="num">20</td><td class="why">Sub-agents alive at once across all worktrees</td></tr>
           <tr><td class="knob">MAX_CONTEXT_REQUEST_DEPTH</td><td class="num">4</td><td class="why">Hops a context request may travel up before it becomes an escalation</td></tr>
           <tr><td class="knob">MAX_ORCHESTRATOR_DEPTH</td><td class="num">4</td><td class="why">Nested orchestrator levels, guard-banded under the runtime cap of 5</td></tr>
+          <tr><td class="knob">MAX_CONTINUATIONS</td><td class="num">3</td><td class="why">Resumes of one unit before its decomposition is declared wrong</td></tr>
         </tbody>
       </table>
     </div>

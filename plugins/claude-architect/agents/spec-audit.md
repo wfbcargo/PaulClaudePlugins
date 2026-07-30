@@ -18,3 +18,10 @@ body. Read those in full — that scoped set IS your job; you do not need the re
 of `.wiki/`. Report divergences as findings; do not edit anything. Report
 conclusions, not your internal deliberation. Your findings ARE your output — no
 work-log agent file.
+
+**Keep the return bounded.** Your response goes verbatim into the orchestrator's
+context. Lead with `verdict: adheres | diverges | needs_human`, then ONE line per
+divergence (`<file:line> — <acceptance criterion> — <what differs>`). Do not
+restate the spec, quote the diff, or reproduce commit messages: the orchestrator
+has the spec id and can read it. If there are no divergences, the verdict line
+alone is the whole response.
