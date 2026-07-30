@@ -30,9 +30,19 @@ the *blast radius of the decision*.
   or pins the cheap tier.
 
 **Tool-gating is the orchestrator/leaf boundary.** Only `orchestrator.md` lists
-the `Task` tool, so only it can spawn children. Every other agent omits `Task`
-and is terminal by construction. Do not add `Task` to a leaf to "let it help" —
+the sub-agent spawn tool, so only it can spawn children. Every other agent omits
+it and is terminal by construction. Do not add it to a leaf to "let it help" —
 that is how you get runaway nesting.
+
+Claude Code has surfaced that tool as `Task` and, in current versions, as
+`Agent`. `orchestrator.md` lists **both** so the grant survives either naming
+(unrecognized names in a `tools:` list are ignored). This matters because the
+failure is silent: an orchestrator that loses the grant does not error — it
+quietly behaves like a leaf, does all the work in its own context, and the run
+still "succeeds." **If nested orchestration stops happening, check this line
+first.** The observable signature of a healthy run is child-orchestrator spawns
+in the session transcript; zero of them on an epic means either the tool grant or
+the delegation defaults (ORCHESTRATION.md → *Delegate or execute*) are broken.
 
 ## Remapping to the models you have
 

@@ -17,7 +17,7 @@ installed:
 
 | Agent | Role |
 |-------|------|
-| `orchestrator` | Recursive team manager. The only agent with the `Task` tool — that flag *is* the orchestrator/leaf boundary. |
+| `orchestrator` | Recursive team manager. The only agent with the spawn tool (`Task`/`Agent`) — that grant *is* the orchestrator/leaf boundary. |
 | `implementation` | Leaf coding agent for one implementation phase, in one worktree. |
 | `fix` | Applies a grouped set of review findings in an `--additional/` worktree. |
 | `review` | Read-only code-quality reviewer; emits structured JSON findings. |
@@ -33,6 +33,12 @@ the AI-to-AI work-log protocol, state reconciliation, and headless operation.
 **Supporting docs**: [`docs/model-routing.md`](./docs/model-routing.md) (tiering,
 fallback, and how to remap models to what you have) and a `.wiki/` starter
 skeleton in [`wiki-template/`](./wiki-template/).
+
+**Illustrated overview**: [`docs/framework.html`](./docs/framework.html) — a
+single self-contained page covering the run shape, the six process stages, all
+eight agent roles with their tiers and tool grants, the review boundaries, and
+the tuning knobs. Open it in a browser; it's the fastest way to hand someone the
+whole model at once.
 
 ## Core ideas
 
@@ -66,7 +72,7 @@ Tune the model IDs in `agents/*.md` to your access — see `docs/model-routing.m
 
 ## Status
 
-`0.1.0`. Extracted from a real project's `.claude/` setup. The agents and the
+`0.1.2`. Extracted from a real project's `.claude/` setup. The agents and the
 protocol are what the author actually runs; the model tiers are pinned to the
 *design* (top tier orchestrates, bounded tier executes) and are meant to be
 remapped to whatever models you have.

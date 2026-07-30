@@ -1,0 +1,878 @@
+<title>ClaudeArchitect — the framework and its agent roles</title>
+
+<style>
+  :root {
+    --ground:      #F4F5F2;
+    --surface:     #FBFBFA;
+    --surface-alt: #ECEEE9;
+    --ink:         #1B1F22;
+    --ink-soft:    #565E63;
+    --ink-faint:   #868D90;
+    --rule:        #DBDED7;
+    --accent:      #16706B;
+    --accent-ink:  #0E4F4B;
+    --accent-soft: #E1EDEB;
+    --warn:        #8C5A11;
+    --warn-soft:   #F3EADA;
+    --crit:        #8F3025;
+    --crit-soft:   #F5E4E1;
+
+    --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+
+    --fs-xs:  0.72rem;
+    --fs-sm:  0.83rem;
+    --fs-md:  1.0625rem;
+    --fs-lg:  1.22rem;
+    --fs-xl:  1.7rem;
+    --fs-2xl: 2.45rem;
+
+    --measure: 68ch;
+    --wide: 1080px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:      #15181A;
+      --surface:     #1C2023;
+      --surface-alt: #22272A;
+      --ink:         #E2E6E4;
+      --ink-soft:    #98A0A1;
+      --ink-faint:   #6D7577;
+      --rule:        #2C3134;
+      --accent:      #52B3A9;
+      --accent-ink:  #7FCFC6;
+      --accent-soft: #1A2E2C;
+      --warn:        #CFA05B;
+      --warn-soft:   #2A2519;
+      --crit:        #D68274;
+      --crit-soft:   #2E1E1B;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #15181A;
+    --surface:     #1C2023;
+    --surface-alt: #22272A;
+    --ink:         #E2E6E4;
+    --ink-soft:    #98A0A1;
+    --ink-faint:   #6D7577;
+    --rule:        #2C3134;
+    --accent:      #52B3A9;
+    --accent-ink:  #7FCFC6;
+    --accent-soft: #1A2E2C;
+    --warn:        #CFA05B;
+    --warn-soft:   #2A2519;
+    --crit:        #D68274;
+    --crit-soft:   #2E1E1B;
+  }
+
+  :root[data-theme="light"] {
+    --ground:      #F4F5F2;
+    --surface:     #FBFBFA;
+    --surface-alt: #ECEEE9;
+    --ink:         #1B1F22;
+    --ink-soft:    #565E63;
+    --ink-faint:   #868D90;
+    --rule:        #DBDED7;
+    --accent:      #16706B;
+    --accent-ink:  #0E4F4B;
+    --accent-soft: #E1EDEB;
+    --warn:        #8C5A11;
+    --warn-soft:   #F3EADA;
+    --crit:        #8F3025;
+    --crit-soft:   #F5E4E1;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: var(--fs-md);
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: var(--wide);
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1.1rem, 4vw, 2.5rem) 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(3rem, 6vw, 4.75rem);
+  }
+
+  .measure { max-width: var(--measure); }
+
+  /* ---- masthead ---- */
+
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 2.4rem;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9rem;
+    align-items: center;
+  }
+  .eyebrow .dim { color: var(--ink-faint); }
+  h1 {
+    font-family: var(--mono);
+    font-size: var(--fs-2xl);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.08;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .standfirst {
+    max-width: var(--measure);
+    font-size: var(--fs-lg);
+    line-height: 1.5;
+    color: var(--ink-soft);
+    text-wrap: pretty;
+  }
+  .standfirst strong { color: var(--ink); font-weight: 600; }
+
+  /* ---- generic section ---- */
+
+  section { display: flex; flex-direction: column; gap: 1.5rem; }
+
+  h2 {
+    font-family: var(--mono);
+    font-size: var(--fs-xl);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+    text-wrap: balance;
+    margin: 0;
+    padding-bottom: 0.7rem;
+    border-bottom: 2px solid var(--ink);
+  }
+  h3 {
+    font-family: var(--mono);
+    font-size: var(--fs-md);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  p { margin: 0; text-wrap: pretty; }
+  .prose { display: flex; flex-direction: column; gap: 1rem; max-width: var(--measure); }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  code, .mono { font-family: var(--mono); font-size: 0.88em; }
+  p code, li code, td code {
+    background: var(--surface-alt);
+    padding: 0.1em 0.34em;
+    border-radius: 3px;
+  }
+
+  /* ---- the depth tree ---- */
+
+  .tree-wrap {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    overflow-x: auto;
+  }
+  .tree {
+    font-family: var(--mono);
+    font-size: var(--fs-sm);
+    line-height: 1.85;
+    padding: 1.6rem 1.5rem;
+    margin: 0;
+    white-space: pre;
+    color: var(--ink-soft);
+    min-width: 46rem;
+  }
+  .tree .rail { color: var(--ink-faint); }
+  .tree .orch { color: var(--accent); font-weight: 600; }
+  .tree .leaf { color: var(--ink); }
+  .tree .note { color: var(--ink-faint); font-style: normal; }
+  .tree .depth {
+    color: var(--ink-faint);
+    font-size: 0.85em;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .tree-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.6rem;
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    color: var(--ink-soft);
+    letter-spacing: 0.03em;
+  }
+  .tree-legend b { color: var(--accent); font-weight: 600; }
+
+  /* ---- numbered stages (order is real here) ---- */
+
+  .stages { display: flex; flex-direction: column; gap: 0; counter-reset: stage; }
+  .stage {
+    display: grid;
+    grid-template-columns: 3.4rem 1fr;
+    gap: 0 1.3rem;
+    padding: 1.35rem 0;
+    border-top: 1px solid var(--rule);
+    align-items: start;
+  }
+  .stage:last-child { border-bottom: 1px solid var(--rule); }
+  .stage::before {
+    counter-increment: stage;
+    content: counter(stage, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: var(--fs-sm);
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    padding-top: 0.18rem;
+    letter-spacing: 0.05em;
+  }
+  .stage-body { display: flex; flex-direction: column; gap: 0.5rem; max-width: var(--measure); }
+  .stage-body p { color: var(--ink-soft); }
+  .stage-body .artifact {
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.04em;
+    color: var(--ink-faint);
+  }
+  .stage-body .artifact b { color: var(--ink-soft); font-weight: 500; }
+
+  /* ---- agent roster ---- */
+
+  .roster {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .agent {
+    background: var(--surface);
+    padding: 1.4rem 1.35rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .agent.is-spawner { background: var(--accent-soft); }
+  .agent-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6rem; }
+  .agent-name {
+    font-family: var(--mono);
+    font-size: var(--fs-md);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .agent.is-spawner .agent-name { color: var(--accent-ink); }
+  .agent p { font-size: 0.95rem; line-height: 1.55; color: var(--ink-soft); }
+  .agent dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.3rem 0.9rem;
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    line-height: 1.5;
+  }
+  .agent dt { color: var(--ink-faint); letter-spacing: 0.06em; text-transform: uppercase; }
+  .agent dd { margin: 0; color: var(--ink-soft); }
+  .agent dd.grant { color: var(--accent-ink); font-weight: 600; }
+
+  /* tier chip: form + color, so it reads at a glance and survives greyscale */
+  .tier {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .tier::before {
+    content: "";
+    width: 0.62rem;
+    height: 0.62rem;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+    flex: none;
+  }
+  .tier-top { color: var(--accent-ink); }
+  .tier-top::before { background: currentColor; }
+  .tier-bounded::before { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+  .tier-cheap::before { background: transparent; }
+
+  /* ---- tables ---- */
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 34rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.8rem 1.1rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  thead th {
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    background: var(--surface-alt);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.knob { font-family: var(--mono); font-size: var(--fs-sm); white-space: nowrap; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+  td .why { color: var(--ink-soft); }
+
+  /* ---- callout ---- */
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 1.15rem 1.35rem;
+    border-radius: 0 4px 4px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    max-width: var(--measure);
+  }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .callout.crit { border-left-color: var(--crit); background: var(--crit-soft); }
+  .callout-label {
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+  }
+  .callout.warn .callout-label { color: var(--warn); }
+  .callout.crit .callout-label { color: var(--crit); }
+  .callout p { font-size: 0.98rem; line-height: 1.55; }
+
+  /* ---- two-column concept pairs ---- */
+
+  .pairs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+    gap: 1.6rem 2.2rem;
+  }
+  .pair { display: flex; flex-direction: column; gap: 0.5rem; }
+  .pair p { font-size: 0.97rem; line-height: 1.55; color: var(--ink-soft); }
+  .pair .kicker {
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  pre.snippet {
+    font-family: var(--mono);
+    font-size: var(--fs-sm);
+    line-height: 1.7;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1.15rem 1.3rem;
+    margin: 0;
+    overflow-x: auto;
+    color: var(--ink-soft);
+  }
+  pre.snippet b { color: var(--ink); font-weight: 600; }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 1.8rem;
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.04em;
+    color: var(--ink-faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.8rem;
+  }
+
+  @media (max-width: 34rem) {
+    .stage { grid-template-columns: 2.6rem 1fr; gap: 0 0.9rem; }
+    h1 { font-size: 1.95rem; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">
+      <span>ClaudeArchitect</span>
+      <span class="dim">v0.1.2</span>
+      <span class="dim">Claude Code plugin</span>
+      <span class="dim">MIT</span>
+    </div>
+    <h1>A coding session, run like a small engineering org.</h1>
+    <p class="standfirst">
+      One long-horizon <strong>orchestrator</strong> classifies the work, decomposes it into epics,
+      specs and implementations, hands each piece to an isolated agent with a written mandate, and
+      integrates the results through a review pipeline. Orchestrators are <strong>recursive</strong> —
+      a spec is handed to its own orchestrator, which runs its own team. Nothing important stays
+      implicit in conversation; it becomes an artifact an isolated agent can pick up cold.
+    </p>
+  </header>
+
+  <section>
+    <h2>The shape of a run</h2>
+    <div class="prose">
+      <p>
+        Depth is the whole design. The session root talks to you; everything below it validates with
+        its <em>spawning</em> agent instead. Each level owns a subtree, and the only agent type that
+        can spawn anything at all is the orchestrator.
+      </p>
+    </div>
+    <div class="tree-wrap">
+<pre class="tree"><span class="depth">depth 0</span>  <span class="orch">orchestrator</span>  <span class="note">session root — the only node that talks to you</span>
+<span class="rail">        │</span>
+<span class="rail">        ├──</span> <span class="depth">d1</span> <span class="orch">orchestrator</span>      <span class="note">spec 7e0e8fb3 · api surface</span>
+<span class="rail">        │      ├──</span> <span class="depth">d2</span> <span class="leaf">implementation</span> <span class="note">phase 2 · event log</span>
+<span class="rail">        │      ├──</span> <span class="depth">d2</span> <span class="leaf">implementation</span> <span class="note">phase 2 · read surface</span>
+<span class="rail">        │      └──</span> <span class="depth">d2</span> <span class="leaf">review</span>         <span class="note">iteration 1 → .review/iteration-1.json</span>
+<span class="rail">        │</span>
+<span class="rail">        ├──</span> <span class="depth">d1</span> <span class="orch">orchestrator</span>      <span class="note">spec 9d5d5653 · admission lifecycle</span>
+<span class="rail">        │      ├──</span> <span class="depth">d2</span> <span class="leaf">implementation</span> <span class="note">queue + breaker</span>
+<span class="rail">        │      └──</span> <span class="depth">d2</span> <span class="leaf">fix</span>            <span class="note">findings F-03, F-07</span>
+<span class="rail">        │</span>
+<span class="rail">        └──</span> <span class="depth">d1</span> <span class="leaf">architecture-audit</span> <span class="note">structural boundary · read-only</span>
+
+<span class="note">        the two d1 orchestrators cannot see each other. the root partitions
+        their files, owns the shared-file merge, and integrates both work-logs.</span></pre>
+    </div>
+    <div class="tree-legend">
+      <span><b>orchestrator</b> — holds the spawn tool, owns a subtree</span>
+      <span>everything else — terminal by construction</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>The process</h2>
+    <div class="prose">
+      <p>
+        Six stages, and the order is load-bearing: each one emits an artifact the next one reads.
+        An unrecorded decision does not exist, because the agent that needs it spawns into a fresh
+        context and can only see what was written down.
+      </p>
+    </div>
+    <div class="stages">
+
+      <div class="stage">
+        <div class="stage-body">
+          <h3>Classify the work</h3>
+          <p>
+            Count intents. One coherent objective is a <em>spec</em>; several interdependent ones are
+            an <em>epic</em> decomposed into specs; a trivial change is a <em>task</em>. Units are
+            defined by the role the work plays, not by size.
+          </p>
+          <p class="artifact"><b>Emits</b> the tier, and <code>.wiki/specs/&lt;id&gt;.md</code> for a spec</p>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="stage-body">
+          <h3>Assign an owner role to every sub-unit</h3>
+          <p>
+            For each spec or phase group, decide <em>orchestrator</em> or <em>leaf</em> — and write it
+            down. This is the step that makes recursion actually happen; skipped, the root silently
+            keeps everything and does all the work in one context.
+          </p>
+          <p class="artifact"><b>Emits</b> one work-log line per sub-unit, e.g. <code>spec 7e0e8fb3: orchestrator</code></p>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="stage-body">
+          <h3>Branch and isolate</h3>
+          <p>
+            Every unit gets its own git worktree under <code>.worktrees/</code>. Branch names are
+            <code>--</code>-separated by tier, so parent and child can never collide as filesystem
+            paths and the branch name <em>is</em> the record of where the work sits.
+          </p>
+          <p class="artifact"><b>Emits</b> <code>main--epic/&lt;id&gt;_name--spec/&lt;id&gt;_name--impl/&lt;id&gt;_phase</code></p>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="stage-body">
+          <h3>Spawn with a mandate</h3>
+          <p>
+            The spawn prompt carries only what changes per task: context and depth, the active rules
+            slice, section-level wiki citations, the file scope, and the mandate — what this agent may
+            decide alone and what it must escalate. The standing protocol lives in the agent
+            definition, so it costs nothing per spawn.
+          </p>
+          <p class="artifact"><b>Emits</b> <code>CONTEXT · ACTIVE RULES · RELEVANT WIKI ENTRIES · YOUR SCOPE · MANDATE</code></p>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="stage-body">
+          <h3>Review before every merge</h3>
+          <p>
+            Three read-only lenses, each answering a question the others don't: is the code good, does
+            it match the spec's intent, does it still fit the project. Findings are grouped by
+            locality and handed to <code>fix</code> agents in their own worktrees, then the loop
+            re-runs until clean or it escalates.
+          </p>
+          <p class="artifact"><b>Emits</b> <code>.review/iteration-&lt;N&gt;.json</code> with a verdict of <code>clean</code>, <code>needs_fixes</code> or <code>needs_human</code></p>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="stage-body">
+          <h3>Integrate, then squash up</h3>
+          <p>
+            Before a worktree is removed, the parent reads the child's work-log and rules on each
+            item: absorb it, lift it into its own pages, promote it to the committed wiki, or discard
+            it because the diff already says it. Then the branch squashes into its parent and is
+            deleted. Top-level units open a PR — the human checkpoint.
+          </p>
+          <p class="artifact"><b>Emits</b> one squash commit per unit, plus any durable knowledge promoted to <code>.wiki/</code></p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Delegate or execute</h2>
+    <div class="prose">
+      <p>
+        The decision is keyed to the taxonomy rather than re-argued each time. Handing a spec to its
+        own orchestrator is the <em>normal</em> case, not a rare escalation of ambition.
+      </p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">The unit an orchestrator owns</th><th scope="col">Each sub-unit gets</th><th scope="col">Default</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Epic</td><td>a child orchestrator per spec</td><td><strong>yes</strong></td></tr>
+          <tr><td>Spec splitting into ≥2 phases with shared files or sequencing</td><td>a child orchestrator per phase group</td><td><strong>yes</strong></td></tr>
+          <tr><td>Spec that is one implementation, or a task</td><td><code>implementation</code> / <code>fix</code> leaves, or do it in place</td><td><strong>yes</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <span class="callout-label">Delegating is not escalating</span>
+      <p>
+        A structural decision <em>inside</em> a subtree being handed to a child is delegated with that
+        child's mandate — the parent names the boundary, the child decides within it. Escalation is
+        only for decisions that cross the orchestrator's own boundary upward. "Too structural to hand
+        off" means widen the child's mandate, not keep the work.
+      </p>
+    </div>
+    <div class="callout warn">
+      <span class="callout-label">The real failure mode</span>
+      <p>
+        Not runaway nesting — the opposite. A root that keeps every spec for itself, spawns only
+        leaves, and exhausts its own context integrating work it should have delegated. Nesting to
+        depth 2–3 is the framework working. Zero child orchestrators on an epic means the
+        decomposition was wrong.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The eight agents</h2>
+    <div class="prose">
+      <p>
+        Each role is pinned to a model tier by the <em>blast radius of its decisions</em>, not by its
+        depth in the tree. The orchestrator is the only role that carries the sub-agent spawn tool —
+        that grant, and nothing else, is what separates an orchestrator from a leaf.
+      </p>
+    </div>
+    <div class="roster">
+
+      <article class="agent is-spawner">
+        <div class="agent-head">
+          <span class="agent-name">orchestrator</span>
+          <span class="tier tier-top">top tier</span>
+        </div>
+        <p>
+          Recursive team manager for one bounded sub-problem. Decomposes its subtree, spawns leaves
+          and further orchestrators, caches and slices the project rules, integrates work-logs, drives
+          the review and merge loops, and reconciles against the latest shared design.
+        </p>
+        <dl>
+          <dt>Spawns</dt><dd class="grant">yes — the only one</dd>
+          <dt>Writes</dt><dd>code, wiki, work-log</dd>
+          <dt>Reports to</dt><dd>its spawning agent</dd>
+        </dl>
+      </article>
+
+      <article class="agent">
+        <div class="agent-head">
+          <span class="agent-name">implementation</span>
+          <span class="tier tier-bounded">bounded</span>
+        </div>
+        <p>
+          The leaf coding agent: one implementation phase, one worktree, one scope. The
+          highest-volume role in the framework, which is exactly why it stays off the top tier. Reads
+          only the wiki entries its spawn prompt cites.
+        </p>
+        <dl>
+          <dt>Spawns</dt><dd>no — terminal</dd>
+          <dt>Writes</dt><dd>code in its worktree</dd>
+          <dt>Reports to</dt><dd>work-log, then exits</dd>
+        </dl>
+      </article>
+
+      <article class="agent">
+        <div class="agent-head">
+          <span class="agent-name">fix</span>
+          <span class="tier tier-bounded">bounded</span>
+        </div>
+        <p>
+          Applies one grouped set of review findings inside an <code>--additional/</code> worktree.
+          Touches only what those findings require; a finding that needs scope expansion is an
+          escalation, not a fix.
+        </p>
+        <dl>
+          <dt>Spawns</dt><dd>no — terminal</dd>
+          <dt>Writes</dt><dd>code in its worktree</dd>
+          <dt>Reports to</dt><dd>finding IDs addressed</dd>
+        </dl>
+      </article>
+
+      <article class="agent">
+        <div class="agent-head">
+          <span class="agent-name">review</span>
+          <span class="tier tier-bounded">bounded</span>
+        </div>
+        <p>
+          Read-only code quality. Emits structured findings — severity, category, file and lines,
+          suggested fix, whether it is mechanically auto-fixable — and a verdict. Architectural fit is
+          deliberately not its job.
+        </p>
+        <dl>
+          <dt>Spawns</dt><dd>no — terminal</dd>
+          <dt>Writes</dt><dd>iteration JSON only</dd>
+          <dt>Wins on</dt><dd>code quality</dd>
+        </dl>
+      </article>
+
+      <article class="agent">
+        <div class="agent-head">
+          <span class="agent-name">spec-audit</span>
+          <span class="tier tier-bounded">bounded</span>
+        </div>
+        <p>
+          Read-only adherence check: does the change do what the spec said it would? Its sources of
+          truth are the spec file, the commit messages and the PR body — a bounded comparison, this
+          change against this intent.
+        </p>
+        <dl>
+          <dt>Spawns</dt><dd>no — terminal</dd>
+          <dt>Writes</dt><dd>findings only</dd>
+          <dt>Wins on</dt><dd>spec adherence</dd>
+        </dl>
+      </article>
+
+      <article class="agent">
+        <div class="agent-head">
+          <span class="agent-name">architecture-audit</span>
+          <span class="tier tier-top">top tier</span>
+        </div>
+        <p>
+          The drift gate, and the one role permitted to read whole wiki files — judging the full
+          picture <em>is</em> the job. Checks placement, boundaries, dependency direction, missing
+          decision records, and whether the wiki is still true. Fires at structural boundaries only,
+          which is what keeps a top-tier model affordable here.
+        </p>
+        <dl>
+          <dt>Spawns</dt><dd>no — terminal</dd>
+          <dt>Writes</dt><dd>findings only</dd>
+          <dt>Runs at</dt><dd>spec→epic, epic→active</dd>
+        </dl>
+      </article>
+
+      <article class="agent">
+        <div class="agent-head">
+          <span class="agent-name">merge</span>
+          <span class="tier tier-bounded">bounded</span>
+        </div>
+        <p>
+          Post-PR conflict resolution. Preserves the intent of both sides — never a blanket ours or
+          theirs — and uses real merge commits rather than squashes so the resolution stays auditable.
+          Tests and lint must pass, or the conflict was not truly resolved.
+        </p>
+        <dl>
+          <dt>Spawns</dt><dd>no — terminal</dd>
+          <dt>Writes</dt><dd>resolved code</dd>
+          <dt>Runs in</dt><dd>a dedicated worktree</dd>
+        </dl>
+      </article>
+
+      <article class="agent">
+        <div class="agent-head">
+          <span class="agent-name">state-doctor</span>
+          <span class="tier tier-cheap">diagnostic</span>
+        </div>
+        <p>
+          Read-only reconciliation for when long runs desync git, the wiki and the worktrees. Finds
+          orphan branches, stale review tags, wiki entries whose branch is gone, agents left paused
+          for context. Proposes fixes; never executes destructive ones, never deletes wiki entries.
+        </p>
+        <dl>
+          <dt>Spawns</dt><dd>no — terminal</dd>
+          <dt>Writes</dt><dd>nothing</dd>
+          <dt>Runs at</dt><dd>session start, after a crash</dd>
+        </dl>
+      </article>
+
+    </div>
+    <div class="callout crit">
+      <span class="callout-label">Silent failure</span>
+      <p>
+        An orchestrator that loses its spawn-tool grant does not error. It quietly behaves like a
+        leaf, does everything in its own context, and the run still reports success. If nested
+        orchestration stops happening, check the <code>tools:</code> line first — then check whether
+        owner roles are being recorded at all.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Review at every boundary</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Merge</th><th scope="col">What runs</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="knob">impl → spec</td>
+            <td class="why">Tests and lint. Diff review. Fix before merge.</td>
+          </tr>
+          <tr>
+            <td class="knob">spec → epic</td>
+            <td class="why">Full test suite. Squashed-diff review. Spec-adherence audit. Architecture-integrity audit.</td>
+          </tr>
+          <tr>
+            <td class="knob">epic/spec → active</td>
+            <td class="why">Architecture-integrity audit, then the review loop until clean. Then a PR, which is where you come in.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose">
+      <p>
+        A finding is only <em>auto-fixable</em> if the fix is mechanical and unambiguous with no new
+        product, architecture or security decision inside it. Anything involving a spec disagreement,
+        a genuine tradeoff, or a security issue without an obvious mitigation sets the verdict to
+        <code>needs_human</code> — and then no auto-fixes are applied at all, so the report you read
+        is uncontaminated.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Two kinds of memory</h2>
+    <div class="pairs">
+      <div class="pair">
+        <span class="kicker">committed · durable</span>
+        <h3>.wiki/</h3>
+        <p>
+          The project's shared memory: architecture, conventions, active rules, decision records,
+          gotchas, glossary, per-spec notes. It rides the squash-merge and outlives every branch. It
+          is also read context, so it has a budget — a bloated wiki is a tax paid by every agent that
+          reads it, and the default for any new entry is <em>omit</em>.
+        </p>
+      </div>
+      <div class="pair">
+        <span class="kicker">gitignored · ephemeral</span>
+        <h3>.work-log/</h3>
+        <p>
+          AI-to-AI scratch paper, one directory per worktree. Not documentation, not for humans —
+          bullets, file:line refs, fragments. Single-writer per file, so no locks are ever needed. It
+          dies with its worktree, and the top-level log is deleted before the PR is pushed.
+        </p>
+      </div>
+      <div class="pair">
+        <span class="kicker">request up · deliver down</span>
+        <h3>Context requests</h3>
+        <p>
+          An agent missing context it should have been given does not go looking for it. It writes
+          <code>paused_for_context</code>, says what it needs, and exits. The parent answers by
+          re-spawning it with the answer attached, or passes the request further up. Nobody ever reads
+          a grandparent's notes.
+        </p>
+      </div>
+      <div class="pair">
+        <span class="kicker">the mandate chain</span>
+        <h3>Who answers to whom</h3>
+        <p>
+          Every spawn carries a written mandate: what this agent may decide, what it must escalate.
+          Requests bubble to the nearest ancestor whose mandate covers them. The relationship is
+          identical at every tier — leaf ⊂ child orchestrator ⊂ session root ⊂ you — so you are simply
+          the root mandate-holder.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Knobs</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">What it bounds</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="knob">MAX_REVIEW_ITERATIONS</td><td class="num">5</td><td class="why">Review-loop passes before escalating to a human</td></tr>
+          <tr><td class="knob">MAX_MERGE_ATTEMPTS</td><td class="num">3</td><td class="why">Conflict-resolution attempts before escalating</td></tr>
+          <tr><td class="knob">MAX_CONCURRENT_AGENTS</td><td class="num">20</td><td class="why">Sub-agents alive at once across all worktrees</td></tr>
+          <tr><td class="knob">MAX_CONTEXT_REQUEST_DEPTH</td><td class="num">4</td><td class="why">Hops a context request may travel up before it becomes an escalation</td></tr>
+          <tr><td class="knob">MAX_ORCHESTRATOR_DEPTH</td><td class="num">4</td><td class="why">Nested orchestrator levels, guard-banded under the runtime cap of 5</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose">
+      <p>Override per project in <code>.claude/settings.json</code>.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Adopting it</h2>
+    <pre class="snippet"><b>/plugin marketplace add</b> wfbcargo/PaulClaudePlugins
+<b>/plugin install</b> claude-architect@paul-claude-plugins</pre>
+    <div class="prose">
+      <p>
+        Then point your project's <code>CLAUDE.md</code> at <code>ORCHESTRATION.md</code>, and copy
+        <code>wiki-template/</code> to <code>.wiki/</code> at the repo root to bootstrap the project
+        memory. Tune the model IDs in <code>agents/*.md</code> to whatever access you have — if you
+        only have one capable model, point every agent at it. You keep the structure and lose only
+        the cost optimization.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <span>ClaudeArchitect v0.1.2</span>
+    <span>MIT</span>
+    <span>github.com/wfbcargo/PaulClaudePlugins</span>
+  </footer>
+
+</div>

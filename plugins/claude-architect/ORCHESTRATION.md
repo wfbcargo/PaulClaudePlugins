@@ -38,7 +38,7 @@ any depth.
 
 | Role | Tier | Notes |
 |------|------|-------|
-| Orchestrator (session root AND recursive children) | top | Long-horizon team manager. The ONLY agent carrying the `Task` tool — that flag is the orchestrator/leaf boundary. |
+| Orchestrator (session root AND recursive children) | top | Long-horizon team manager. The ONLY agent carrying the spawn tool (`Task`/`Agent`) — that grant is the orchestrator/leaf boundary. |
 | Architecture-integrity audit | top | Read-only drift gate. Runs at structural boundaries only. |
 | Implementation / fix (leaf) | bounded | Highest volume; keep it off the top tier. |
 | Code review / spec-adherence audit | bounded | Bounded reasoning. |
@@ -51,19 +51,37 @@ Concrete model IDs are pinned in each `agents/*.md`. See `docs/model-routing.md`
 for the reasoning and for how to remap tiers to the models you have access to
 (e.g. collapse everything onto one model if you only have one).
 
-### When to spawn a CHILD orchestrator vs leaves
+### Delegate or execute: child orchestrator vs leaves
 
-Spawn a child orchestrator ONLY when ALL hold: the sub-problem decomposes into ≥2
-sub-agents that must be coordinated; it carries decisions with blast radius beyond
-a single diff (placement, boundaries, sub-structure); and it will outlast one
-focused context window. Otherwise spawn leaves directly or do the bounded work in
-place. Keep it strict — nesting degrades when overused.
+This decision is **keyed to the work taxonomy**, not re-derived per task. Defaults:
+
+| The unit an orchestrator owns | Each sub-unit gets | Default |
+|-------------------------------|--------------------|---------|
+| Epic | a child orchestrator per spec | **yes** |
+| Spec decomposing into ≥2 phases with shared files or sequencing | a child orchestrator per phase group | **yes** |
+| Spec that is one implementation, or a task | `implementation` / `fix` leaves, or do it in place | **yes** |
+
+Flatten a default `yes` to leaves only when: the subtree is a single diff; the
+phases share no files and need no sequencing (they're parallel leaves, not a
+team); or a child would exceed the depth cap.
+
+**Nesting to depth 2–3 is the framework working, not a smell.** The failure mode
+in practice is the opposite of runaway nesting: a root that keeps every spec for
+itself, spawns only leaves, and blows its own context window integrating work it
+should have delegated. If a run produced no child orchestrators and the work was
+an epic or a multi-phase spec, the decomposition was wrong.
+
+**Delegating is not escalating.** A structural decision *inside* a subtree being
+handed to a child is delegated with that child's mandate. Escalation is only for
+decisions crossing the orchestrator's own mandate boundary upward. "Too
+structural to hand off" means *widen the child's mandate*, not *keep it*.
 
 ### Depth budget
 
 Runtime hard cap on nested subagents is 5; guard-band at `MAX_ORCHESTRATOR_DEPTH`
-(4). Leaves are terminal (no `Task` tool). If a child spawn would exceed the cap,
-the decomposition is wrong: flatten (spawn leaves) or escalate.
+(4). A child's depth is the parent's + 1 and the parent MUST state it in the spawn
+prompt. Leaves are terminal (no spawn tool). If a child spawn would exceed the
+cap, the decomposition is wrong: flatten (spawn leaves) or escalate.
 
 ### Reasoning hygiene
 
@@ -175,14 +193,24 @@ Units are defined by **kind** (the role the work plays), not size.
 | **Implementation** | execution of intent | smallest unit with its own worktree; squashes into its spec as one commit | Can it be built and verified against the spec without its own statement of intent? |
 | **task** | trivial change | no intent doc, nothing review-worthy; rare | Would writing a spec entry for it be pure overhead? |
 
-**Classification procedure:** count intents (one → standalone spec; many
-interdependent → epic decomposed into specs; trivial → task); decompose each spec
-into implementations (sequential `Phase 1, 2, 3` or parallel `Phase 1.1, 1.2`);
-emit the artifact (create the branch, write `.wiki/specs/<id>.md` before spawning
-implementation work). This taxonomy IS the orchestrate-vs-execute axis: epics and
-multi-impl specs are orchestration (top tier); single implementations are
-execution (bounded tier). Classifying the work and routing the model are the same
-decision.
+**Classification procedure:**
+
+1. Count intents — one → standalone spec; many interdependent → epic decomposed
+   into specs; trivial → task.
+2. Decompose each spec into implementations (sequential `Phase 1, 2, 3` or
+   parallel `Phase 1.1, 1.2`).
+3. **Assign an owner role to every sub-unit: `orchestrator` or `leaf`**, per the
+   defaults in *Delegate or execute* above. Write the assignment down — one line
+   per sub-unit in the work-log, e.g. `spec 7e0e8fb3 api-surface: orchestrator`.
+   This step is not optional and not implicit: a sub-unit with no recorded role
+   is a delegation decision that was defaulted past rather than made.
+4. Emit the artifact — create the branch, write `.wiki/specs/<id>.md` before
+   spawning implementation work.
+
+This taxonomy IS the orchestrate-vs-execute axis: epics and multi-impl specs are
+orchestration (top tier); single implementations are execution (bounded tier).
+Classifying the work, choosing the owner role, and routing the model are one
+decision made once and recorded once.
 
 **Reclassification promotes, never forces.** If an implementation grows its own
 intent → it was a spec. If a spec sprouts a second independent objective → it was
@@ -315,6 +343,66 @@ task-specific.
 spawning agent, not the user" a rule instead of a hope. The relationship is
 identical at every tier — leaf ⊂ child-orchestrator ⊂ session-root ⊂ user — so the
 user is simply the root mandate-holder.
+
+### Worked example: spawning a CHILD ORCHESTRATOR
+
+The template above is tier-agnostic, but a child-orchestrator spawn carries four
+things a leaf spawn does not: **its depth**, **its sibling isolation**, **the
+seams it owns vs. consumes**, and **explicit permission to decompose further**.
+Condensed from a real run (`spec 7e0e8fb3`, an epic's API-surface spec split into
+three phase groups, each handed to its own orchestrator at depth 1):
+
+```
+## CONTEXT
+- Worktree: <abs path>/.worktrees/4b5455cc_log-read-surface — you and your leaves
+  work ONLY here. Absolute paths; never `cd` into another worktree.
+- Branch: main--epic/9f319748_public-market-study--spec/7e0e8fb3_api-surface--impl/4b5455cc_log-read-surface
+- Parent task: spec 7e0e8fb3 — the public API surface. I am the session root and
+  your spawning agent; validate with me, not the user.
+- Your task: the event log and the entire read surface — acceptance criteria 2, 3, 5.
+- Your agent ID: orchestrator-log-read-c4e802
+- Your depth: 1 (your leaves are depth 2; the cap is 4)
+- Project wiki: <worktree>/.wiki/ — read only what is cited below, and pass your
+  leaves only what each one needs.
+
+**A sibling orchestrator is running in parallel** on .worktrees/9d5d5653_admission-lifecycle
+(Phase 3 — queue, admission, cancel). You cannot see each other and must not try.
+The file split below is what keeps you apart.
+
+## ACTIVE RULES
+<global subset verbatim, plus scoped rules matching this subtree>
+
+## RELEVANT WIKI ENTRIES
+<section-level citations — the child re-cites a subset to each of its own leaves>
+
+## YOUR SCOPE
+**You own, exclusively:** <file/dir list>
+**You must NOT touch:** <the sibling's files, shared packages>
+**<shared file> is the one real collision risk.** Keep changes there purely
+additive and minimal — do not restructure. I resolve the merge.
+
+## THE SEAM WITH <sibling> — build this, they consume it
+<the interface, and: keep it tiny and stable. If you conclude it must change
+shape, escalate to me rather than redefining it — the sibling is building against
+it right now and cannot see you.>
+
+## MANDATE
+**You may decide freely:** <the subtree's internal structure> — including **your
+leaf decomposition and how many leaves**.
+**You MUST escalate to me:** anything touching <shared surface>; any unsettled
+spec conflict; a change to the seam above; a defect finding beyond your assigned scope.
+
+**Decompose and spawn.** You are an orchestrator: spawn `implementation` leaves,
+each with its own ACTIVE RULES slice, its own cited wiki entries, and a scope that
+does not overlap its siblings. Leaves are terminal. Spawn a child orchestrator of
+your own per the defaults in your agent definition.
+```
+
+Note what makes it work: the parent partitions **files**, not just tasks; names
+the one shared file and reserves the merge for itself; makes the cross-sibling
+interface an escalation trigger; and states outright that leaf decomposition is
+the child's call. That last line is what actually transfers authority — without
+it, a child orchestrator tends to do the work itself.
 
 ---
 
