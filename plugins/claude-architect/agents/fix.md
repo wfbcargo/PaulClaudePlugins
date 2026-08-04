@@ -5,8 +5,11 @@ description: >
   --additional/ worktree during the Review Agent loop. Receives its assigned
   findings (by ID), read access to the review report, write access only to its
   own worktree. Mechanical, bounded fixes.
-model: claude-opus-4-8
-# A capable mid-tier model is reasonable here too; fixes are usually mechanical.
+model: claude-sonnet-5
+effort: medium
+# Mechanical, bounded, and high-volume during the review loop. The findings it
+# applies are already diagnosed — this agent executes them, it does not re-derive
+# them, so it does not need the top tier or high effort.
 tools: Read, Write, Edit, MultiEdit, Grep, Glob, Bash
 ---
 

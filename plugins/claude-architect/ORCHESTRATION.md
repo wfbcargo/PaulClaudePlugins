@@ -56,27 +56,41 @@ Override per-project in `.claude/settings.json`.
 
 ---
 
-## MODEL ROUTING & RECURSIVE ORCHESTRATION
+## MODEL & EFFORT ROUTING, AND RECURSIVE ORCHESTRATION
 
-Model tier follows **role, not depth**. A node runs on the top tier iff it
-orchestrates a team; on a cheaper tier iff it does bounded work. Orchestrator-ness
-is recursive, so the expensive model appears wherever orchestration happens, at
-any depth.
+Routing follows **role, not depth** — orchestrator-ness is recursive, so the
+routing for an orchestrator applies wherever orchestration happens, at any depth.
+Two dials, on two different axes:
 
-| Role | Tier | Notes |
-|------|------|-------|
-| Orchestrator (session root AND recursive children) | top | Long-horizon team manager. The ONLY agent carrying the spawn tool (`Task`/`Agent`) — that grant is the orchestrator/leaf boundary. |
-| Architecture-integrity audit | top | Read-only drift gate. Runs at structural boundaries only. |
-| Implementation / fix (leaf) | bounded | Highest volume; keep it off the top tier. |
-| Code review / spec-adherence audit | bounded | Bounded reasoning. |
-| Merge | bounded | Semantic conflict resolution. |
-| state-doctor | cheap | Read-only diagnostics. |
+- **Model** follows *whether a mistake is silent*. Orchestration and architecture
+  drift are unbounded; a mangled merge or a missed bug slips through a gate
+  unnoticed. Those stay on the top tier. Failures that surface immediately —
+  a leaf that misreads its scope, an auditor finding you can dispute — run
+  bounded.
+- **Effort** follows *how much the agent must derive for itself*. An orchestrator
+  invents a decomposition from a mandate: high. A leaf is handed `CONTEXT`,
+  `SCOPE`, `ACTIVE RULES` and a work log: medium.
 
-The split axis is **blast radius of the decision**. Orchestration and
-architecture integrity carry project-wide decisions; everything else is bounded.
-Concrete model IDs are pinned in each `agents/*.md`. See `docs/model-routing.md`
-for the reasoning and for how to remap tiers to the models you have access to
-(e.g. collapse everything onto one model if you only have one).
+| Role | Model | Effort | Notes |
+|------|-------|--------|-------|
+| Orchestrator (session root AND recursive children) | top | `high` | Long-horizon team manager. The ONLY agent carrying the spawn tool (`Task`/`Agent`) — that grant is the orchestrator/leaf boundary. |
+| Architecture-integrity audit | top | `high` | Read-only drift gate. Boundary-triggered, so it stays cheap. |
+| Code review | top | `medium` | Low-volume; a missed bug is a silent pass. |
+| Merge | top | `medium` | Low-volume; a bad merge still compiles. |
+| Spec-adherence audit | bounded | `medium` | Checkable against a written spec. |
+| Implementation / fix (leaf) | bounded | `medium` | **Highest volume** — this row is where cost actually lives. |
+| state-doctor | cheap | `low` | Read-only checklist diagnostics. |
+
+**Leaves run at medium deliberately.** Lower effort makes a model follow
+instructions literally and scope to what was asked — which is precisely what
+`## YOUR SCOPE` is trying to enforce. Gold-plating leaves are a failure mode this
+framework spends review iterations catching, so the dial and the mandate pull the
+same direction.
+
+Concrete model IDs and the full reasoning are in each `agents/*.md` and in
+`docs/model-routing.md`, along with how to remap to the models you have (e.g.
+collapse everything onto one model if you only have one — keeping just the effort
+split still recovers most of the saving, because it applies to the volume role).
 
 ### Delegate or execute: child orchestrator vs leaves
 
@@ -97,6 +111,15 @@ in practice is the opposite of runaway nesting: a root that keeps every spec for
 itself, spawns only leaves, and blows its own context window integrating work it
 should have delegated. If a run produced no child orchestrators and the work was
 an epic or a multi-phase spec, the decomposition was wrong.
+
+**But the table says what shape a sub-unit gets — not to manufacture sub-units.**
+Delegate the units the decomposition actually produced. Do not split a modest job
+into pieces to have something to hand off, do not spawn a child to verify work
+the review pipeline already gates, and do not wrap a single sub-unit in a child
+orchestrator that adds a hop and no parallelism. Every spawn pays twice: once for
+a fresh context to re-establish what the parent already knew, and again for the
+parent to read the result. Full rules in `agents/orchestrator.md` → *Spawn
+discipline*.
 
 **Delegating is not escalating.** A structural decision *inside* a subtree being
 handed to a child is delegated with that child's mandate. Escalation is only for

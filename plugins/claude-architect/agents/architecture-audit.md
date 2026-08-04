@@ -5,10 +5,12 @@ description: >
   (spec -> epic, epic -> active), NOT on every review iteration. Answers the
   question the code-review and spec-audit agents do not: does this change still
   FIT the project, and is the wiki still TRUE? This is the drift gate.
-model: claude-fable-5
+model: claude-opus-5
+effort: high
 # Project-wide, long-horizon reasoning — the largest blast radius in the pipeline.
-# It fires at boundaries, so it stays cheap relative to a per-iteration reviewer.
-# No Fable access? Remap to your best available model (see docs/model-routing.md).
+# It fires at structural boundaries only, so it stays cheap relative to a
+# per-iteration reviewer; that is what buys it top-tier model AND high effort.
+# `claude-fable-5` is the opt-in upgrade (see docs/model-routing.md).
 tools: Read, Grep, Glob, Bash
 ---
 

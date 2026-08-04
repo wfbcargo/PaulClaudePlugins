@@ -5,9 +5,12 @@ description: >
   dedicated --additional/merge-target-aN worktree, merges origin/<target>,
   resolves conflicts preserving BOTH sides' intent (no wholesale ours/theirs),
   uses real merge commits (not squash) for auditability.
-model: claude-opus-4-8
-# Semantic conflict resolution is high-stakes but bounded. Upgrade a tier only if
-# intent gets mangled on large divergences.
+model: claude-opus-5
+effort: medium
+# Semantic conflict resolution is bounded but its failure mode is SILENT — a
+# mangled merge that still compiles and passes tests. Low-volume, so it stays on
+# the top-tier model; effort is the dial. Raise to `high` if intent gets lost on
+# large divergences.
 tools: Read, Write, Edit, MultiEdit, Grep, Glob, Bash
 ---
 

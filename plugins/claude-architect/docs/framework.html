@@ -599,9 +599,16 @@
     <h2>The eight agents</h2>
     <div class="prose">
       <p>
-        Each role is pinned to a model tier by the <em>blast radius of its decisions</em>, not by its
-        depth in the tree. The orchestrator is the only role that carries the sub-agent spawn tool —
-        that grant, and nothing else, is what separates an orchestrator from a leaf.
+        Each role carries two pins, both keyed to the role rather than to its depth in the tree. The
+        <strong>model tier</strong> follows whether a mistake is <em>silent</em> — orchestration and
+        architecture drift are unbounded, and a mangled merge or a missed bug slips through a gate
+        unnoticed, so those stay top-tier. The <strong>effort level</strong> follows how much the
+        agent must derive for itself: an orchestrator invents a decomposition from a mandate
+        (<code>high</code>), while a leaf is handed CONTEXT, SCOPE, ACTIVE RULES and a work log
+        (<code>medium</code>). Leaves run at medium deliberately — lower effort scopes work to what
+        was asked, which is the same discipline the SCOPE block exists to enforce. The orchestrator
+        is the only role that carries the sub-agent spawn tool — that grant, and nothing else, is
+        what separates an orchestrator from a leaf.
       </p>
     </div>
     <div class="roster">
@@ -609,7 +616,7 @@
       <article class="agent is-spawner">
         <div class="agent-head">
           <span class="agent-name">orchestrator</span>
-          <span class="tier tier-top">top tier</span>
+          <span class="tier tier-top">top · high</span>
         </div>
         <p>
           Recursive team manager for one bounded sub-problem. Decomposes its subtree, spawns leaves
@@ -626,7 +633,7 @@
       <article class="agent">
         <div class="agent-head">
           <span class="agent-name">implementation</span>
-          <span class="tier tier-bounded">bounded</span>
+          <span class="tier tier-bounded">bounded · medium</span>
         </div>
         <p>
           The leaf coding agent: one implementation phase, one worktree, one scope. The
@@ -643,7 +650,7 @@
       <article class="agent">
         <div class="agent-head">
           <span class="agent-name">fix</span>
-          <span class="tier tier-bounded">bounded</span>
+          <span class="tier tier-bounded">bounded · medium</span>
         </div>
         <p>
           Applies one grouped set of review findings inside an <code>--additional/</code> worktree.
@@ -660,7 +667,7 @@
       <article class="agent">
         <div class="agent-head">
           <span class="agent-name">review</span>
-          <span class="tier tier-bounded">bounded</span>
+          <span class="tier tier-top">top · medium</span>
         </div>
         <p>
           Read-only code quality. Emits structured findings — severity, category, file and lines,
@@ -677,7 +684,7 @@
       <article class="agent">
         <div class="agent-head">
           <span class="agent-name">spec-audit</span>
-          <span class="tier tier-bounded">bounded</span>
+          <span class="tier tier-bounded">bounded · medium</span>
         </div>
         <p>
           Read-only adherence check: does the change do what the spec said it would? Its sources of
@@ -694,7 +701,7 @@
       <article class="agent">
         <div class="agent-head">
           <span class="agent-name">architecture-audit</span>
-          <span class="tier tier-top">top tier</span>
+          <span class="tier tier-top">top · high</span>
         </div>
         <p>
           The drift gate, and the one role permitted to read whole wiki files — judging the full
@@ -712,7 +719,7 @@
       <article class="agent">
         <div class="agent-head">
           <span class="agent-name">merge</span>
-          <span class="tier tier-bounded">bounded</span>
+          <span class="tier tier-top">top · medium</span>
         </div>
         <p>
           Post-PR conflict resolution. Preserves the intent of both sides — never a blanket ours or
@@ -729,7 +736,7 @@
       <article class="agent">
         <div class="agent-head">
           <span class="agent-name">state-doctor</span>
-          <span class="tier tier-cheap">diagnostic</span>
+          <span class="tier tier-cheap">cheap · low</span>
         </div>
         <p>
           Read-only reconciliation for when long runs desync git, the wiki and the worktrees. Finds

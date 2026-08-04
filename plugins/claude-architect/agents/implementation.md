@@ -4,10 +4,14 @@ description: >
   Leaf coding agent for a single implementation phase inside one impl worktree.
   Narrow, well-scoped work dispatched by the orchestrator with a full spawn
   prompt (CONTEXT, ACTIVE RULES, SCOPE, WORK LOG). Does the actual code changes.
-model: claude-opus-4-8
+model: claude-sonnet-5
+effort: medium
 # The highest-volume role (up to MAX_CONCURRENT_AGENTS at once), so it dominates
-# spend. Keep it off the top orchestration tier; drop to a capable mid-tier model
-# if code-quality holds on your codebase.
+# spend — and it is the one role where a model/effort change actually moves the
+# bill. Sonnet 5 is near-Opus on coding; medium effort suits a leaf that receives
+# a fully-specified spawn prompt, because scoping tightly to what was asked is
+# the desired behaviour here, not a regression. Raise to `claude-opus-5` /
+# `high` only if review iterations climb on your codebase.
 tools: Read, Write, Edit, MultiEdit, Grep, Glob, Bash
 ---
 

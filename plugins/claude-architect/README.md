@@ -26,6 +26,15 @@ installed:
 | `merge` | Resolves PR conflicts preserving both sides' intent (real merge commits). |
 | `state-doctor` | Read-only reconciliation: detects git / wiki / worktree drift. |
 
+**The entry point** — [`/architect`](./skills/architect/SKILL.md). Classification
+is step one of every run, and prose in a doc doesn't reliably trigger it: this
+skill does. It fires automatically on a substantive change request (or on demand
+via `/architect`), loads the methodology from the plugin itself, runs a preflight
+for drift and interrupted units, classifies against the taxonomy, and routes.
+Epics and multi-phase specs decompose without asking. A single implementation
+gets an `AskUserQuestion` offering full orchestration / worktree-only / inline. A
+trivial task is just done, with the classification stated in one line.
+
 **The methodology that ties them together** — [`ORCHESTRATION.md`](./ORCHESTRATION.md).
 This is the always-on layer: work taxonomy, branch naming, the mandatory spawn
 template, the review boundaries, the three memory types, and the receipt and
@@ -53,11 +62,16 @@ whole model at once.
 
 ## Core ideas
 
-- **Model tier follows role, not depth.** Orchestration and architecture
-  integrity carry project-wide decisions and run on the top tier; bounded work
-  (leaf implementation, code review, merges) runs on a cheaper one. The split
-  axis is the blast radius of the decision. Have only one model? Point every
-  agent at it — you keep the structure, you lose only the cost optimization.
+- **Model and effort are two dials on two axes, and both follow role, not depth.**
+  *Model* follows whether a mistake is **silent**: orchestration and architecture
+  drift are unbounded, and a mangled merge or a missed bug slips through a gate
+  unnoticed — those stay top-tier. *Effort* follows how much the agent has to
+  derive for itself: an orchestrator invents a decomposition from a mandate
+  (`high`); a leaf is handed CONTEXT, SCOPE, ACTIVE RULES and a work log
+  (`medium`). Leaves run at medium *deliberately* — lower effort scopes work to
+  what was asked, which is the same discipline `## YOUR SCOPE` exists to enforce.
+  Have only one model? Point every agent at it and keep the effort split; it
+  applies to the highest-volume role, so most of the saving survives.
 - **Worktree isolation.** Every unit of work gets its own git worktree and
   branch. Branch names are `--`-separated by tier (`…--spec/<id>_name--impl/<id>_phase`)
   so parent and child branches never collide as filesystem paths, and the branch
@@ -94,16 +108,19 @@ whole model at once.
 /plugin install claude-architect@paul-claude-plugins
 ```
 
-Then adopt the methodology by pointing your project's `CLAUDE.md` at
-`ORCHESTRATION.md` (or pasting in the sections you want), and copy
-`wiki-template/` to `.wiki/` at your repo root to bootstrap the project memory.
-Tune the model IDs in `agents/*.md` to your access — see `docs/model-routing.md`.
+Then just describe what you want built — `/architect` triggers on its own and
+walks the rest, including offering to seed `.wiki/` from `wiki-template/`.
+
+Pointing your project's `CLAUDE.md` at `ORCHESTRATION.md` is still worth doing:
+it keeps the always-on discipline resident for turns that don't go through the
+skill. Tune the model IDs and `effort:` levels in `agents/*.md` to your access —
+see `docs/model-routing.md`.
 
 ## Status
 
-`0.2.0`. Extracted from a real project's `.claude/` setup. The agents and the
+`0.3.0`. Extracted from a real project's `.claude/` setup. The agents and the
 protocol are what the author actually runs; the model tiers are pinned to the
-*design* (top tier orchestrates, bounded tier executes) and are meant to be
-remapped to whatever models you have.
+*design* (silent-failure roles on the top tier, everything else bounded) and are
+meant to be remapped to whatever models you have.
 
 MIT licensed.

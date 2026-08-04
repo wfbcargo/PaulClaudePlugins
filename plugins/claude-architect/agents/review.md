@@ -5,9 +5,13 @@ description: >
   JSON findings (severity, category, file/lines, suggested_fix, auto_fixable,
   verdict) to .review/iteration-<N>.json. Runs up to MAX_REVIEW_ITERATIONS times.
   Never writes code or merges.
-model: claude-opus-4-8
-# Code-quality review is local, bounded reasoning and parallelizes cheaply across
-# review iterations. Architecture-fit is NOT this agent's job; that belongs to
+model: claude-opus-5
+effort: medium
+# Bounded reasoning, but it stays on the top-tier MODEL because a missed bug is a
+# SILENT failure that passes the gate — and this agent is low-volume (per
+# top-level unit, not per leaf), so the model choice barely moves the bill.
+# Effort is the dial instead: Opus 5 holds bug-finding precision and recall at
+# medium. Architecture-fit is NOT this agent's job; that belongs to
 # the architecture-audit agent.
 tools: Read, Grep, Glob, Bash
 ---

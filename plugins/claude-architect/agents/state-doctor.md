@@ -5,9 +5,12 @@ description: >
   git, the wiki, and worktree state (orphan worktrees/branches, stale tags,
   dangling paused_for_context agents, broken rule Source: links). Proposes fixes;
   NEVER executes destructive ops itself and NEVER deletes wiki entries.
-model: claude-sonnet-4-6
-# Diagnostic pattern-matching against git/fs/wiki state — a mid-tier model is
-# plenty. Remap to whatever mid-tier model you have.
+model: claude-haiku-4-5
+effort: low
+# Read-only pattern-matching against git/fs/wiki state, against a fixed checklist
+# it reads from disk. It proposes; it never executes. The cheapest tier is
+# correct here. Note Haiku's 200K context — if a repo's worktree/branch listing
+# is large, raise to `claude-sonnet-5`.
 tools: Read, Grep, Glob, Bash
 ---
 

@@ -5,7 +5,8 @@ description: >
   to the spec's stated objective (from .wiki/specs/<id>.md plus commit messages
   and PR body). Runs alongside the Review Agent. On spec-adherence disagreement,
   the auditor wins; on code-quality, the Review Agent wins.
-model: claude-opus-4-8
+model: claude-sonnet-5
+effort: medium
 # Spec-adherence is bounded: compare THIS change against THIS spec's stated
 # intent. Project-level architectural fit is handled separately by the
 # architecture-audit agent.
