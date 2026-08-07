@@ -17,10 +17,17 @@ classification does not exist.
 
 ## 0. Load the framework
 
-Read `${CLAUDE_SKILL_DIR}/../../ORCHESTRATION.md` now, unless this project's
-`CLAUDE.md` already carries it. It is the methodology you execute; everything
-below assumes it. Read `${CLAUDE_SKILL_DIR}/../../docs/model-routing.md` only if
-you need to remap models.
+Read `${CLAUDE_SKILL_DIR}/../../ORCHESTRATION.md` now. It is the methodology you
+execute; everything below assumes it. Read
+`${CLAUDE_SKILL_DIR}/../../docs/model-routing.md` only if you need to remap
+models.
+
+You are the only context that needs this file — do NOT pass it, quote it at
+length, or copy it into spawn prompts. Each sub-agent's protocol is already in
+its own `agents/*.md`. (If this project's `CLAUDE.md` carries ORCHESTRATION.md,
+that is a misconfiguration worth flagging to the user once: `CLAUDE.md` is
+injected into every sub-agent, so it multiplies the file's cost by the run's
+agent count.)
 
 Then a fast preflight, in one batched set of calls:
 
@@ -36,10 +43,10 @@ Act on what you find:
 | Orphan worktrees or branches, or the tree looks off | Spawn `state-doctor` per ORCHESTRATION.md → *Drift* before decomposing. |
 | No `.wiki/` | Offer to seed it from `${CLAUDE_SKILL_DIR}/../../wiki-template/`. Do not proceed silently without one — `rules.md` is what every spawn carries. |
 
-## 1. Classify
+## 1. Classify — kind, then footprint
 
 Apply the taxonomy from ORCHESTRATION.md → *Work taxonomy & classification*.
-Units are defined by **kind**, not size:
+Tier is decided by **kind**, not size:
 
 | Tier | Test |
 |------|------|
@@ -48,30 +55,66 @@ Units are defined by **kind**, not size:
 | **Implementation** | Can it be built and verified against the spec without its own statement of intent? |
 | **task** | Would writing a spec entry for it be pure overhead? |
 
-Count intents first. One intent → spec. Several interdependent → epic. Then
-decompose each spec into implementations and assign every sub-unit an owner role
-(`orchestrator` or `leaf`) per *Delegate or execute*.
+Count intents first. One intent → spec. Several interdependent → epic.
+
+**Then estimate the footprint, and say the number.** Kind sets the tier;
+footprint sets the machinery. These are different questions, and skipping the
+second is what makes a 60-line change cost an epic's worth of process:
+
+| Footprint | Machinery |
+|---|---|
+| ≲5 files, no shared/public surface, no migration | In place on one branch. No child worktrees, no review loop, no PR ceremony — whatever the tier says. |
+| Moderate, or touches a shared surface | Worktree + review before merge. |
+| Large, crosses module boundaries, or user-facing | The full pipeline. |
+
+Ground the estimate in something real — a `Glob`/`Grep` for the files the change
+would touch beats a guess, and it is two tool calls. Then decompose each spec
+into implementations and assign every sub-unit an owner role (`orchestrator` or
+`leaf`) per *Delegate or execute*, where **leaf is the default** and a child
+orchestrator must clear both of its conditions.
 
 If the request is too vague to classify — you cannot name the objective or say
 what "done" checks — ask the user for that, and only that, before continuing.
 Do not classify defensively upward to cover ambiguity.
 
-## 2. Route by tier
+## 2. Show the plan before you spend it
 
-**Epic, or a spec that decomposes into ≥2 coordinated phases → orchestrate. Do
-not ask.** This is what the framework is for and the user has already opted in by
-installing it. State the classification and the decomposition in a few lines,
-then execute: create the branch and worktree with `scripts/new-worktree.sh`,
+**Anything that will spawn sub-agents or create a worktree gets a plan preview
+first — four lines, then go.** Installing the framework is consent to the method,
+not a blank cheque on every request. The preview is not a permission prompt and
+does not block: state it, then proceed unless the user stops you.
+
+```
+<tier> · <footprint> · <n> files
+decomposition: <sub-unit>: leaf, <sub-unit>: leaf, …
+cost: ~<n> agents, <n> worktrees, ≤<n> review passes
+go
+```
+
+If the plan comes out at more than **6 agents or 3 worktrees**, stop and check
+with `AskUserQuestion` before starting — offer the plan as-is against a leaner
+version you name concretely. A run that size is worth ten seconds of the user's
+attention.
+
+**Then route:**
+
+**Epic, or a spec of ≥2 coordinated phases, at moderate-or-larger footprint →
+orchestrate.** Create the branch and worktree with `scripts/new-worktree.sh`,
 write `.wiki/specs/<id>.md` before spawning any implementation work, and spawn
-per the *Sub-agent spawn template*.
+per the *Sub-agent spawn template*. Remember that sequential phases do NOT get
+their own worktrees — they commit into the parent's.
 
-**A spec that is one implementation → ask before orchestrating.** The machinery
-(worktree, spec file, review loop, PR) is real overhead for a single diff. Use
+**Small footprint (≲5 files, no shared surface) → do it in place, whatever the
+tier says.** Say which tier you classified it as and that you are skipping the
+machinery on footprint. A two-intent change to three files is still two intents;
+it is not an epic's worth of process.
+
+**A spec that is one implementation → ask before orchestrating.** Use
 `AskUserQuestion` with these options, in this order:
 
-1. **Full orchestration** — worktree + spec file + review pipeline + PR. Recommended when the change touches shared surfaces, needs review before merge, or you want the audit trail.
-2. **Worktree, no pipeline** — isolate the work on a branch, skip the review loop and PR. Good for solo work you'll review yourself.
-3. **Inline** — edit on the current branch, no branch, no artifacts.
+1. **Inline** — edit on the current branch, no branch, no artifacts. Recommended for a contained change you'll review yourself.
+2. **Worktree, no pipeline** — isolate the work on a branch, skip the review loop and PR.
+3. **Full orchestration** — worktree + spec file + review pipeline + PR. Worth it when the change touches shared surfaces or you want the audit trail.
 
 Name your recommendation in the option label and give the concrete reason from
 *this* request (which files, which shared surfaces) — not a generic tradeoff.
@@ -93,5 +136,12 @@ avoid the machinery.
   to verify work the review pipeline already gates — see `agents/orchestrator.md`
   → *Spawn discipline*. The taxonomy says what shape a sub-unit gets; it does not
   say to manufacture sub-units.
+- Do not spawn a child orchestrator that clears only one of its two conditions.
+  Two leaves under a manager is two leaves and a manager.
+- Do not create a worktree for a sequential phase or for a `fix` agent. Worktrees
+  are for agents running at the same time; everything else commits in place.
 - Do not paste the static agent protocol into spawn prompts. It lives in each
   `agents/*.md` and costs nothing per spawn.
+- Do not skip the plan preview because the classification felt obvious. The
+  preview is what lets the user stop a run before it spends, and it costs four
+  lines.

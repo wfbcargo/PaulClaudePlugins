@@ -4,6 +4,14 @@
 than to a leaf, and especially when two or more children will run in parallel.
 For leaf spawns the resident template in `ORCHESTRATION.md` is sufficient.
 
+**First, confirm the child is warranted.** Leaves are the default; a child
+orchestrator needs BOTH of its conditions (ORCHESTRATION.md → *Delegate or
+execute*): the sub-unit would itself spawn ≥3 leaves, AND those leaves need file
+partitioning or sequencing between them. Parallelism alone is not a reason —
+independent tracks that partition by file are parallel *leaves*, and you can
+spawn those yourself in one message without paying for a manager. If only one
+condition holds, close this file and spawn leaves.
+
 The template is tier-agnostic, but a child-orchestrator spawn carries four things
 a leaf spawn does not: **its depth**, **its sibling isolation**, **the seams it
 owns vs. consumes**, and **explicit permission to decompose further**.

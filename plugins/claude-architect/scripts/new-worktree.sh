@@ -7,6 +7,11 @@
 #   slug    short kebab name for the unit
 #   parent  defaults to the current branch (never hardcode main/develop)
 #
+# A worktree is not free — see ORCHESTRATION.md → "When a unit gets a worktree".
+# Only call this for a unit that needs FILESYSTEM ISOLATION: a top-level unit, or
+# a leaf that runs CONCURRENTLY with a sibling. Sequential phases commit into
+# their parent's worktree and never call this script.
+#
 # Refuses to run on a dirty tree — stop and ask the user instead.
 # Prints key=value lines so the caller parses rather than re-derives.
 set -euo pipefail
@@ -14,7 +19,13 @@ set -euo pipefail
 TIER="${1:?tier required: epic|spec|impl|additional}"
 SLUG="${2:?slug required}"
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+# Anchor on the MAIN repo root, never the caller's worktree. `--show-toplevel`
+# resolves to the linked worktree when this runs from inside one, which nests
+# .worktrees/ inside .worktrees/ — a checkout inside a checkout, and on Windows
+# a fast route past the 260-char path limit. `--git-common-dir` always points at
+# the main repo's .git, so every worktree lands flat at the top no matter who
+# calls this.
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Ephemeral framework dirs are excluded: they are meant to be gitignored, and a
@@ -61,6 +72,16 @@ git -C "$WT_DIR" commit --allow-empty -q \
   -m "${TIER}: start ${SLUG} [target: ${PARENT}] [${TIER}-id: ${UNIT_ID}]"
 
 mkdir -p "$WT_DIR/.work-log/agents" "$WT_DIR/.work-log/continue"
+
+# A fresh worktree has no dependencies, no venv, no build cache — so without this
+# every leaf either re-installs from scratch or fails its tests for a reason that
+# has nothing to do with its work. Non-fatal: a project with no deps needs none
+# of it, and a setup failure should not block the unit.
+SETUP="$(dirname "$0")/worktree-setup.sh"
+if [ -x "$SETUP" ] || [ -f "$SETUP" ]; then
+  sh "$SETUP" "$REPO_ROOT" "$REPO_ROOT/$WT_DIR" >&2 || \
+    echo "warning: worktree setup failed — deps may be missing in $WT_DIR" >&2
+fi
 
 echo "branch=${BRANCH}"
 echo "worktree=${REPO_ROOT}/${WT_DIR}"

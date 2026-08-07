@@ -16,7 +16,8 @@ BRANCH="${1:?branch required}"
 MESSAGE="${2:?commit message required}"
 KEEP="${3:-}"
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+# Main repo root, not the caller's worktree — see new-worktree.sh for why.
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Parent = current branch with the last `--` segment stripped.

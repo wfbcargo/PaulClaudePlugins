@@ -21,6 +21,14 @@ internal reasoning as output — report actions and decisions only (this keeps
 work-logs terse and avoids the reasoning_extraction refusal path on classifier
 tiers).
 
+**Your worktree may be your own or your parent's — your spawn prompt says
+which, and it changes what you may do with git.** A worktree is created only for
+agents running concurrently, so a sequential phase works directly in its
+parent's worktree. If you were given your OWN worktree, commit there normally.
+If you were placed in your PARENT's, you may commit only your own phase's files
+and must never branch, merge, stash, reset, or `git checkout` — siblings and
+your parent are using that tree. When in doubt, edit and let the parent commit.
+
 ## Protocol (applies every spawn — the spawn prompt does NOT repeat this)
 
 **Wiki consumption.** Read ONLY the wiki entries your spawn prompt cites (by

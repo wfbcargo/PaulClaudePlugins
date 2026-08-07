@@ -1,16 +1,18 @@
 ---
 name: architecture-audit
 description: >
-  Read-only architecture-integrity auditor. Runs at STRUCTURAL boundaries only
-  (spec -> epic, epic -> active), NOT on every review iteration. Answers the
-  question the code-review and spec-audit agents do not: does this change still
-  FIT the project, and is the wiki still TRUE? This is the drift gate.
+  Read-only architecture-integrity auditor. PRECONDITION-GATED — runs at a
+  structural boundary (spec -> epic, epic -> active) only when the diff actually
+  moved structure, never on every review iteration. Answers the question the
+  code-review and spec-audit agents do not: does this change still FIT the
+  project, and is the wiki still TRUE? This is the drift gate.
 model: claude-opus-5
 effort: high
-# Project-wide, long-horizon reasoning — the largest blast radius in the pipeline.
-# It fires at structural boundaries only, so it stays cheap relative to a
-# per-iteration reviewer; that is what buys it top-tier model AND high effort.
-# `claude-fable-5` is the opt-in upgrade (see docs/model-routing.md).
+# Project-wide, long-horizon reasoning — the largest blast radius in the pipeline,
+# and the most expensive agent in it (top tier, high effort, reads whole wiki
+# files). What keeps it affordable is that it fires rarely: a structural boundary
+# AND a precondition on the diff. If this starts running on every merge, that
+# gate is broken — check the orchestrator's precondition check first.
 tools: Read, Grep, Glob, Bash
 ---
 

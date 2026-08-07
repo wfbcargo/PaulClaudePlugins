@@ -419,7 +419,7 @@
   <header class="masthead">
     <div class="eyebrow">
       <span>ClaudeArchitect</span>
-      <span class="dim">v0.1.2</span>
+      <span class="dim">v0.4.0</span>
       <span class="dim">Claude Code plugin</span>
       <span class="dim">MIT</span>
     </div>
@@ -427,9 +427,10 @@
     <p class="standfirst">
       One long-horizon <strong>orchestrator</strong> classifies the work, decomposes it into epics,
       specs and implementations, hands each piece to an isolated agent with a written mandate, and
-      integrates the results through a review pipeline. Orchestrators are <strong>recursive</strong> —
-      a spec is handed to its own orchestrator, which runs its own team. Nothing important stays
-      implicit in conversation; it becomes an artifact an isolated agent can pick up cold.
+      integrates the results through a review pipeline. It <em>can</em> nest — an orchestrator may
+      hand a large spec to another — but it defaults to <strong>flat</strong>, because a manager that
+      writes no code is the most expensive thing a run can buy. Nothing important stays implicit in
+      conversation; it becomes an artifact an isolated agent can pick up cold.
     </p>
   </header>
 
@@ -437,31 +438,37 @@
     <h2>The shape of a run</h2>
     <div class="prose">
       <p>
-        Depth is the whole design. The session root talks to you; everything below it validates with
-        its <em>spawning</em> agent instead. Each level owns a subtree, and the only agent type that
-        can spawn anything at all is the orchestrator.
+        The session root talks to you; everything below it validates with its <em>spawning</em> agent
+        instead. Each level owns a subtree, and the only agent type that can spawn anything at all is
+        the orchestrator. Most runs look like the first tree — one manager, a fan of leaves.
       </p>
     </div>
     <div class="tree-wrap">
-<pre class="tree"><span class="depth">depth 0</span>  <span class="orch">orchestrator</span>  <span class="note">session root — the only node that talks to you</span>
+<pre class="tree"><span class="note">THE COMMON SHAPE — one orchestrator, leaves for the work</span>
+<span class="depth">depth 0</span>  <span class="orch">orchestrator</span>  <span class="note">session root — the only node that talks to you</span>
 <span class="rail">        │</span>
-<span class="rail">        ├──</span> <span class="depth">d1</span> <span class="orch">orchestrator</span>      <span class="note">spec 7e0e8fb3 · api surface</span>
-<span class="rail">        │      ├──</span> <span class="depth">d2</span> <span class="leaf">implementation</span> <span class="note">phase 2 · event log</span>
-<span class="rail">        │      ├──</span> <span class="depth">d2</span> <span class="leaf">implementation</span> <span class="note">phase 2 · read surface</span>
-<span class="rail">        │      └──</span> <span class="depth">d2</span> <span class="leaf">review</span>         <span class="note">iteration 1 → .review/iteration-1.json</span>
-<span class="rail">        │</span>
-<span class="rail">        ├──</span> <span class="depth">d1</span> <span class="orch">orchestrator</span>      <span class="note">spec 9d5d5653 · admission lifecycle</span>
-<span class="rail">        │      ├──</span> <span class="depth">d2</span> <span class="leaf">implementation</span> <span class="note">queue + breaker</span>
-<span class="rail">        │      └──</span> <span class="depth">d2</span> <span class="leaf">fix</span>            <span class="note">findings F-03, F-07</span>
-<span class="rail">        │</span>
-<span class="rail">        └──</span> <span class="depth">d1</span> <span class="leaf">architecture-audit</span> <span class="note">structural boundary · read-only</span>
+<span class="rail">        ├──</span> <span class="depth">d1</span> <span class="leaf">implementation</span>   <span class="note">phase 1 · event log        ┐ parallel:</span>
+<span class="rail">        ├──</span> <span class="depth">d1</span> <span class="leaf">implementation</span>   <span class="note">phase 2 · read surface     ┘ a worktree each</span>
+<span class="rail">        ├──</span> <span class="depth">d1</span> <span class="leaf">implementation</span>   <span class="note">phase 3 · queue — sequential, NO worktree</span>
+<span class="rail">        ├──</span> <span class="depth">d1</span> <span class="leaf">review</span>           <span class="note">┐ one message,</span>
+<span class="rail">        ├──</span> <span class="depth">d1</span> <span class="leaf">spec-audit</span>       <span class="note">┘ run concurrently</span>
+<span class="rail">        └──</span> <span class="depth">d1</span> <span class="leaf">fix</span>              <span class="note">findings F-03, F-07 · edits in place, no worktree</span>
 
-<span class="note">        the two d1 orchestrators cannot see each other. the root partitions
+<span class="note">THE EXCEPTION — a child orchestrator, only when a spec is ≥3 coordinated
+leaves AND someone has to referee their files</span>
+<span class="depth">depth 0</span>  <span class="orch">orchestrator</span>  <span class="note">session root</span>
+<span class="rail">        ├──</span> <span class="depth">d1</span> <span class="orch">orchestrator</span>     <span class="note">spec 7e0e8fb3 · api surface — 4 leaves, shared files</span>
+<span class="rail">        │      ├──</span> <span class="depth">d2</span> <span class="leaf">implementation</span>
+<span class="rail">        │      └──</span> <span class="depth">d2</span> <span class="leaf">implementation</span>
+<span class="rail">        └──</span> <span class="depth">d1</span> <span class="leaf">architecture-audit</span> <span class="note">only if the diff moved structure</span>
+
+<span class="note">        parallel children cannot see each other. the parent partitions
         their files, owns the shared-file merge, and integrates both work-logs.</span></pre>
     </div>
     <div class="tree-legend">
       <span><b>orchestrator</b> — holds the spawn tool, owns a subtree</span>
       <span>everything else — terminal by construction</span>
+      <span>a child orchestrator must earn itself — leaves are the default</span>
     </div>
   </section>
 
@@ -478,13 +485,16 @@
 
       <div class="stage">
         <div class="stage-body">
-          <h3>Classify the work</h3>
+          <h3>Classify the work, then size it</h3>
           <p>
             Count intents. One coherent objective is a <em>spec</em>; several interdependent ones are
-            an <em>epic</em> decomposed into specs; a trivial change is a <em>task</em>. Units are
-            defined by the role the work plays, not by size.
+            an <em>epic</em>; a trivial change is a <em>task</em>. Tier follows the role the work
+            plays, not its size — but the <em>machinery</em> follows footprint. Under about five
+            files with no shared surface, the work happens in place whatever the tier says. Kind and
+            footprint are two questions, and conflating them is what makes a 60-line change cost an
+            epic's worth of process.
           </p>
-          <p class="artifact"><b>Emits</b> the tier, and <code>.wiki/specs/&lt;id&gt;.md</code> for a spec</p>
+          <p class="artifact"><b>Emits</b> the tier, the footprint estimate, and <code>.wiki/specs/&lt;id&gt;.md</code> for a spec</p>
         </div>
       </div>
 
@@ -493,22 +503,26 @@
           <h3>Assign an owner role to every sub-unit</h3>
           <p>
             For each spec or phase group, decide <em>orchestrator</em> or <em>leaf</em> — and write it
-            down. This is the step that makes recursion actually happen; skipped, the root silently
-            keeps everything and does all the work in one context.
+            down. Leaf is the default; a child orchestrator needs a sub-unit of three or more leaves
+            that someone has to referee. An unrecorded choice is one that was defaulted past rather
+            than made.
           </p>
-          <p class="artifact"><b>Emits</b> one work-log line per sub-unit, e.g. <code>spec 7e0e8fb3: orchestrator</code></p>
+          <p class="artifact"><b>Emits</b> one work-log line per sub-unit, e.g. <code>spec 7e0e8fb3: leaf ×2</code></p>
         </div>
       </div>
 
       <div class="stage">
         <div class="stage-body">
-          <h3>Branch and isolate</h3>
+          <h3>Branch, and isolate only what runs at once</h3>
           <p>
-            Every unit gets its own git worktree under <code>.worktrees/</code>. Branch names are
-            <code>--</code>-separated by tier, so parent and child can never collide as filesystem
-            paths and the branch name <em>is</em> the record of where the work sits.
+            A worktree buys exactly one thing: filesystem isolation between agents running at the
+            same time. Top-level units and parallel siblings get one; sequential phases and
+            <code>fix</code> agents commit in place. Worktrees land flat in the main repo's
+            <code>.worktrees/</code>, never nested — a checkout inside a checkout duplicates disk and,
+            on Windows, runs the combined paths into the 260-character limit. Branch names stay
+            <code>--</code>-separated by tier, so the name <em>is</em> the record of where work sits.
           </p>
-          <p class="artifact"><b>Emits</b> <code>main--epic/&lt;id&gt;_name--spec/&lt;id&gt;_name--impl/&lt;id&gt;_phase</code></p>
+          <p class="artifact"><b>Emits</b> <code>main--epic/&lt;id&gt;_name--spec/&lt;id&gt;_name--impl/&lt;id&gt;_phase</code>, plus a worktree with its dependencies already linked</p>
         </div>
       </div>
 
@@ -530,9 +544,11 @@
           <h3>Review before every merge</h3>
           <p>
             Three read-only lenses, each answering a question the others don't: is the code good, does
-            it match the spec's intent, does it still fit the project. Findings are grouped by
-            locality and handed to <code>fix</code> agents in their own worktrees, then the loop
-            re-runs until clean or it escalates.
+            it match the spec's intent, does it still fit the project. The first two run concurrently;
+            the third is gated on the diff having actually moved structure. Findings are grouped by
+            locality and handed to <code>fix</code> agents that edit in place, then the loop re-runs
+            until clean, until nothing above minor remains, or it escalates. Every pass is serial and
+            therefore wall-clock the user waits through — which is why the cap is two.
           </p>
           <p class="artifact"><b>Emits</b> <code>.review/iteration-&lt;N&gt;.json</code> with a verdict of <code>clean</code>, <code>needs_fixes</code> or <code>needs_human</code></p>
         </div>
@@ -559,21 +575,35 @@
     <h2>Delegate or execute</h2>
     <div class="prose">
       <p>
-        The decision is keyed to the taxonomy rather than re-argued each time. Handing a spec to its
-        own orchestrator is the <em>normal</em> case, not a rare escalation of ambition.
+        The decision is keyed to the taxonomy rather than re-argued each time — and it defaults to
+        <em>leaves</em>. A child orchestrator costs a fresh top-tier context that re-establishes what
+        the parent already knew, plus its own decomposition, integration, audits and checkpoints, and
+        then the parent pays again to read its receipt. That layer writes no code. It must earn
+        itself by clearing <strong>both</strong> conditions: the sub-unit would itself spawn
+        <strong>≥3 leaves</strong>, <em>and</em> those leaves need file partitioning or sequencing
+        between them.
       </p>
     </div>
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th scope="col">The unit an orchestrator owns</th><th scope="col">Each sub-unit gets</th><th scope="col">Default</th></tr>
+          <tr><th scope="col">The unit an orchestrator owns</th><th scope="col">Default</th></tr>
         </thead>
         <tbody>
-          <tr><td>Epic</td><td>a child orchestrator per spec</td><td><strong>yes</strong></td></tr>
-          <tr><td>Spec splitting into ≥2 phases with shared files or sequencing</td><td>a child orchestrator per phase group</td><td><strong>yes</strong></td></tr>
-          <tr><td>Spec that is one implementation, or a task</td><td><code>implementation</code> / <code>fix</code> leaves, or do it in place</td><td><strong>yes</strong></td></tr>
+          <tr><td>Epic whose specs are each ≥3 coordinated leaves</td><td>a child orchestrator per spec</td></tr>
+          <tr><td>Epic whose specs are 1–2 leaves each</td><td><strong>own it — spawn those leaves directly</strong></td></tr>
+          <tr><td>Spec splitting into ≥3 phases needing partition or sequencing</td><td>a child orchestrator per phase group</td></tr>
+          <tr><td>Spec of 1–2 phases, or a task</td><td><strong>leaves, or do it in place</strong></td></tr>
         </tbody>
       </table>
+    </div>
+    <div class="callout">
+      <span class="callout-label">Parallelism does not require a manager</span>
+      <p>
+        Independent tracks that partition by file are parallel <em>leaves</em> — sent in one message,
+        they run concurrently and cost nothing extra. Reach for a child orchestrator only when the
+        refereeing between those tracks is itself the work.
+      </p>
     </div>
     <div class="callout">
       <span class="callout-label">Delegating is not escalating</span>
@@ -585,12 +615,15 @@
       </p>
     </div>
     <div class="callout warn">
-      <span class="callout-label">The real failure mode</span>
+      <span class="callout-label">Two failure modes, and you can only see one of them</span>
       <p>
-        Not runaway nesting — the opposite. A root that keeps every spec for itself, spawns only
-        leaves, and exhausts its own context integrating work it should have delegated. Nesting to
-        depth 2–3 is the framework working. Zero child orchestrators on an epic means the
-        decomposition was wrong.
+        Under-delegating is visible: a root exhausts its own context integrating work it should have
+        handed off, and returns <code>exhausted</code>. Over-delegating is invisible — every run
+        succeeds, just slower and several times more expensive, because each manager re-derives what
+        its parent already knew. Nothing in a transcript flags it. That asymmetry is why the default
+        sits on the side you <em>can</em> detect: depth 2 is normal, depth 3 wants a reason, and at
+        every level the question is what the manager does that its parent could not. If the answer is
+        "hold two leaves", it is not a manager.
       </p>
     </div>
   </section>
@@ -636,13 +669,14 @@
           <span class="tier tier-bounded">bounded · medium</span>
         </div>
         <p>
-          The leaf coding agent: one implementation phase, one worktree, one scope. The
-          highest-volume role in the framework, which is exactly why it stays off the top tier. Reads
-          only the wiki entries its spawn prompt cites.
+          The leaf coding agent: one implementation phase, one scope. The highest-volume role in the
+          framework, which is exactly why it stays off the top tier. Reads only the wiki entries its
+          spawn prompt cites. Gets its own worktree when it runs beside a sibling; otherwise works
+          directly in its parent's.
         </p>
         <dl>
           <dt>Spawns</dt><dd>no — terminal</dd>
-          <dt>Writes</dt><dd>code in its worktree</dd>
+          <dt>Writes</dt><dd>code in its assigned worktree</dd>
           <dt>Reports to</dt><dd>work-log, then exits</dd>
         </dl>
       </article>
@@ -653,13 +687,14 @@
           <span class="tier tier-bounded">bounded · medium</span>
         </div>
         <p>
-          Applies one grouped set of review findings inside an <code>--additional/</code> worktree.
-          Touches only what those findings require; a finding that needs scope expansion is an
-          escalation, not a fix.
+          Applies one grouped set of review findings, editing in the top-level worktree without
+          committing — findings are grouped by locality so siblings touch disjoint files, and the
+          orchestrator commits the batch. Touches only what those findings require; a finding that
+          needs scope expansion is an escalation, not a fix.
         </p>
         <dl>
           <dt>Spawns</dt><dd>no — terminal</dd>
-          <dt>Writes</dt><dd>code in its worktree</dd>
+          <dt>Writes</dt><dd>code — never git</dd>
           <dt>Reports to</dt><dd>finding IDs addressed</dd>
         </dl>
       </article>
@@ -706,13 +741,15 @@
         <p>
           The drift gate, and the one role permitted to read whole wiki files — judging the full
           picture <em>is</em> the job. Checks placement, boundaries, dependency direction, missing
-          decision records, and whether the wiki is still true. Fires at structural boundaries only,
-          which is what keeps a top-tier model affordable here.
+          decision records, and whether the wiki is still true. The most expensive agent in the
+          pipeline, so it is doubly gated: a structural boundary <em>and</em> a diff that actually
+          moved structure. A change confined to function bodies inside one module cannot drift the
+          architecture, and this agent is skipped.
         </p>
         <dl>
           <dt>Spawns</dt><dd>no — terminal</dd>
           <dt>Writes</dt><dd>findings only</dd>
-          <dt>Runs at</dt><dd>spec→epic, epic→active</dd>
+          <dt>Runs at</dt><dd>spec→epic, epic→active — if structure moved</dd>
         </dl>
       </article>
 
@@ -870,9 +907,9 @@
           <tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">What it bounds</th></tr>
         </thead>
         <tbody>
-          <tr><td class="knob">MAX_REVIEW_ITERATIONS</td><td class="num">5</td><td class="why">Review-loop passes before escalating to a human</td></tr>
+          <tr><td class="knob">MAX_REVIEW_ITERATIONS</td><td class="num">2</td><td class="why">Review-loop passes before escalating to a human — each one is serial wall-clock</td></tr>
           <tr><td class="knob">MAX_MERGE_ATTEMPTS</td><td class="num">3</td><td class="why">Conflict-resolution attempts before escalating</td></tr>
-          <tr><td class="knob">MAX_CONCURRENT_AGENTS</td><td class="num">20</td><td class="why">Sub-agents alive at once across all worktrees</td></tr>
+          <tr><td class="knob">MAX_CONCURRENT_AGENTS</td><td class="num">6</td><td class="why">Sub-agents alive at once — bounded by disk, not by model throughput</td></tr>
           <tr><td class="knob">MAX_CONTEXT_REQUEST_DEPTH</td><td class="num">4</td><td class="why">Hops a context request may travel up before it becomes an escalation</td></tr>
           <tr><td class="knob">MAX_ORCHESTRATOR_DEPTH</td><td class="num">4</td><td class="why">Nested orchestrator levels, guard-banded under the runtime cap of 5</td></tr>
           <tr><td class="knob">MAX_CONTINUATIONS</td><td class="num">3</td><td class="why">Resumes of one unit before its decomposition is declared wrong</td></tr>
@@ -880,7 +917,13 @@
       </table>
     </div>
     <div class="prose">
-      <p>Override per project in <code>.claude/settings.json</code>.</p>
+      <p>
+        Override per project in <code>.claude/settings.json</code>. The first and third are
+        deliberately low: review passes are strictly serial, so each one is time the user spends
+        waiting, and concurrent leaves are bounded by disk rather than by model throughput — twenty
+        of them running tests in twenty worktrees will thrash a machine long before the orchestrator
+        notices.
+      </p>
     </div>
   </section>
 
@@ -890,17 +933,24 @@
 <b>/plugin install</b> claude-architect@paul-claude-plugins</pre>
     <div class="prose">
       <p>
-        Then point your project's <code>CLAUDE.md</code> at <code>ORCHESTRATION.md</code>, and copy
-        <code>wiki-template/</code> to <code>.wiki/</code> at the repo root to bootstrap the project
-        memory. Tune the model IDs in <code>agents/*.md</code> to whatever access you have — if you
-        only have one capable model, point every agent at it. You keep the structure and lose only
-        the cost optimization.
+        Copy <code>wiki-template/</code> to <code>.wiki/</code> at the repo root to bootstrap the
+        project memory, and add <code>.claude/worktree-setup.sh</code> if your tests need more than
+        linked dependencies to run in a fresh checkout. Tune the model IDs in
+        <code>agents/*.md</code> to whatever access you have — if you only have one capable model,
+        point every agent at it. You keep the structure and lose only the cost optimization.
+      </p>
+      <p>
+        <b>Do not put <code>ORCHESTRATION.md</code> in your <code>CLAUDE.md</code>.</b> That file is
+        injected into every sub-agent, so residency there multiplies an 8k-token document by the
+        whole run's agent count — spent on leaves that never classify work or decide delegation, and
+        whose protocol already lives in their own <code>agents/*.md</code>. The <code>/architect</code>
+        skill reads it in the session root, which is the only context that uses it.
       </p>
     </div>
   </section>
 
   <footer>
-    <span>ClaudeArchitect v0.1.2</span>
+    <span>ClaudeArchitect v0.4.0</span>
     <span>MIT</span>
     <span>github.com/wfbcargo/PaulClaudePlugins</span>
   </footer>

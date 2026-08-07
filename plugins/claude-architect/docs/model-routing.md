@@ -83,10 +83,13 @@ Claude Code has surfaced that tool as `Task` and, in current versions, as
 (unrecognized names in a `tools:` list are ignored). This matters because the
 failure is silent: an orchestrator that loses the grant does not error — it
 quietly behaves like a leaf, does all the work in its own context, and the run
-still "succeeds." **If nested orchestration stops happening, check this line
-first.** The observable signature of a healthy run is child-orchestrator spawns
-in the session transcript; zero of them on an epic means either the tool grant or
-the delegation defaults (ORCHESTRATION.md → *Delegate or execute*) are broken.
+still "succeeds." **If an orchestrator stops spawning anything at all — leaves
+included — check this line first.**
+
+Note that **zero child orchestrators is not itself a symptom.** Leaves are the
+default (ORCHESTRATION.md → *Delegate or execute*), and most runs should have no
+nested orchestrators at all. The signature of a broken grant is an orchestrator
+spawning nothing whatsoever and doing every phase in its own context.
 
 ## Remapping to the models you have
 
@@ -105,17 +108,26 @@ the delegation defaults (ORCHESTRATION.md → *Delegate or execute*) are broken.
 
 In descending order of impact:
 
-1. **The leaf rows.** `implementation` and `fix` run up to
-   `MAX_CONCURRENT_AGENTS` at once and dominate the bill. Everything else is
-   rounding error by comparison.
-2. **Orchestrator fan-out**, not orchestrator model. A run that spawns children
-   for work a single agent could finish costs more than any model choice. See
-   `agents/orchestrator.md` → *Spawn discipline*.
+1. **Agent count**, which is set by the delegation defaults — not by any model
+   choice. A child orchestrator that manages two leaves costs more than the two
+   leaves do, and writes no code. Leaves are the default for exactly this
+   reason; see ORCHESTRATION.md → *Delegate or execute*.
+2. **The leaf rows.** `implementation` and `fix` run up to
+   `MAX_CONCURRENT_AGENTS` at once and dominate what is left.
 3. **Wiki and spawn-prompt size.** `.wiki/rules.md` is paid on every spawn ×
-   concurrency; see ORCHESTRATION.md → *Active Rules*.
+   concurrency; see ORCHESTRATION.md → *Active Rules*. And never let
+   `ORCHESTRATION.md` reach `CLAUDE.md` — that multiplies an 8k-token document by
+   the whole run's agent count, for agents that need none of it.
 4. **Effort on the bounded roles.** Real, but smaller than the above.
 
-Do not tune (1) by lowering the orchestrator — that inverts the leverage.
+Do not tune (2) by lowering the orchestrator — that inverts the leverage.
+
+**Wall-clock is a separate axis from cost, and it is usually worktrees and serial
+gates, not tokens.** Fresh worktrees start with no dependencies (see
+`scripts/worktree-setup.sh`), and every review iteration is serial by
+construction. If runs feel slow rather than expensive, look at
+ORCHESTRATION.md → *When a unit gets a worktree* and `MAX_REVIEW_ITERATIONS`
+before you touch any model.
 
 ## Model fallback & refusals
 

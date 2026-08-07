@@ -1,14 +1,19 @@
 # ClaudeArchitect
 
-A recursive multi-agent orchestration framework for [Claude Code](https://claude.com/claude-code).
+A multi-agent orchestration framework for [Claude Code](https://claude.com/claude-code).
 
 It treats a coding session like a small engineering org. One long-horizon
 **orchestrator** classifies the work, decomposes it into epics / specs /
-implementations, runs each piece in an **isolated git worktree**, and drives a
+implementations, isolates concurrent work in **git worktrees**, and drives a
 **review + spec-audit + architecture-audit + merge** pipeline before every
 squash-merge. Nothing important stays implicit in conversation: it becomes an
 artifact (a branch name, a spec file, a work-log entry) that an isolated agent
 can pick up cold.
+
+The framework can nest — an orchestrator can spawn another — but it **defaults to
+flat**. Managers that write no code are the most expensive thing a run can buy,
+so a child orchestrator has to earn itself, and most runs are one orchestrator
+plus leaves.
 
 ## What's in the box
 
@@ -17,9 +22,9 @@ installed:
 
 | Agent | Role |
 |-------|------|
-| `orchestrator` | Recursive team manager. The only agent with the spawn tool (`Task`/`Agent`) — that grant *is* the orchestrator/leaf boundary. |
-| `implementation` | Leaf coding agent for one implementation phase, in one worktree. |
-| `fix` | Applies a grouped set of review findings in an `--additional/` worktree. |
+| `orchestrator` | Team manager, optionally recursive. The only agent with the spawn tool (`Task`/`Agent`) — that grant *is* the orchestrator/leaf boundary. |
+| `implementation` | Leaf coding agent for one implementation phase. |
+| `fix` | Applies a grouped set of review findings, in the top-level worktree. |
 | `review` | Read-only code-quality reviewer; emits structured JSON findings. |
 | `spec-audit` | Read-only: does the change match the spec's *intent*? |
 | `architecture-audit` | Read-only drift gate: does the change still *fit*, and is the wiki still true? |
@@ -31,24 +36,36 @@ is step one of every run, and prose in a doc doesn't reliably trigger it: this
 skill does. It fires automatically on a substantive change request (or on demand
 via `/architect`), loads the methodology from the plugin itself, runs a preflight
 for drift and interrupted units, classifies against the taxonomy, and routes.
-Epics and multi-phase specs decompose without asking. A single implementation
-gets an `AskUserQuestion` offering full orchestration / worktree-only / inline. A
+Tier comes from *kind*; the machinery comes from *footprint*, so a two-intent
+change to three files does not buy an epic's worth of process. Anything that
+will spawn agents or create worktrees prints a four-line plan preview
+(decomposition, agent count, worktree count, review passes) before spending, and
+stops to ask if the plan exceeds 6 agents or 3 worktrees. A single implementation
+gets an `AskUserQuestion` offering inline / worktree-only / full orchestration. A
 trivial task is just done, with the classification stated in one line.
 
 **The methodology that ties them together** — [`ORCHESTRATION.md`](./ORCHESTRATION.md).
-This is the always-on layer: work taxonomy, branch naming, the mandatory spawn
+Work taxonomy, footprint sizing, branch and worktree policy, the mandatory spawn
 template, the review boundaries, the three memory types, and the receipt and
-continue-file contracts that keep orchestrator context bounded. It is meant to be
-resident in your `CLAUDE.md`, so it carries only what shapes every decision.
+continue-file contracts that keep orchestrator context bounded. The `/architect`
+skill reads it in the session root, which is the only context that uses it.
+**Do not put it in your `CLAUDE.md`** — that file is injected into every
+sub-agent, which multiplies an 8k-token document by the whole run's agent count
+for agents whose protocol is already in their own `agents/*.md`.
 
 **At-a-moment procedures** — [`docs/procedures/`](./docs/procedures/): the review
 loop, child-orchestrator spawns, state reconciliation, parallel sessions, and
 headless operation. Each is read when its trigger fires and not before; the
 triggers stay resident in `ORCHESTRATION.md`.
 
-**Mechanical git recipes** — [`scripts/`](./scripts/): `new-worktree.sh` and
-`squash-up.sh`. Prose the orchestrator has to reconstruct is both expensive and
-error-prone, so the branch/worktree/squash sequences are scripts it invokes.
+**Mechanical git recipes** — [`scripts/`](./scripts/): `new-worktree.sh`,
+`squash-up.sh`, and `worktree-setup.sh`. Prose the orchestrator has to
+reconstruct is both expensive and error-prone, so the branch/worktree/squash
+sequences are scripts it invokes. `worktree-setup.sh` runs automatically on every
+new worktree to link dependency trees and copy env files — without it a fresh
+checkout has no `node_modules`, and every leaf either re-installs or fails its
+tests for a reason unrelated to its work. Override it per project with
+`.claude/worktree-setup.sh`.
 
 **Supporting docs**: [`docs/model-routing.md`](./docs/model-routing.md) (tiering,
 fallback, and how to remap models to what you have) and a `.wiki/` starter
@@ -72,10 +89,15 @@ whole model at once.
   what was asked, which is the same discipline `## YOUR SCOPE` exists to enforce.
   Have only one model? Point every agent at it and keep the effort split; it
   applies to the highest-volume role, so most of the saving survives.
-- **Worktree isolation.** Every unit of work gets its own git worktree and
-  branch. Branch names are `--`-separated by tier (`…--spec/<id>_name--impl/<id>_phase`)
-  so parent and child branches never collide as filesystem paths, and the branch
-  name *is* the documentation of where the work sits.
+- **Worktrees buy concurrency, and nothing else — so only concurrent work gets
+  one.** A worktree is a fresh checkout with no dependencies and no build cache;
+  the create/setup/remove cycle is the largest wall-clock cost in a run. Top-level
+  units and parallel siblings get worktrees. Sequential phases and `fix` agents
+  commit in place. Worktrees always land flat in the main repo's `.worktrees/` —
+  never nested inside each other, which would put a checkout inside a checkout
+  and, on Windows, run the combined paths into the 260-char limit. Branch names
+  stay `--`-separated by tier (`…--spec/<id>_name--impl/<id>_phase`), so the
+  branch name *is* the documentation of where the work sits.
 - **Three kinds of memory, chosen by lifecycle — not by topic.** `.wiki/` is
   durable, human-readable, committed project memory. `.work-log/agents/` is
   per-worktree scratch a child writes for its parent, stripped before the PR.
@@ -111,10 +133,28 @@ whole model at once.
 Then just describe what you want built — `/architect` triggers on its own and
 walks the rest, including offering to seed `.wiki/` from `wiki-template/`.
 
-Pointing your project's `CLAUDE.md` at `ORCHESTRATION.md` is still worth doing:
-it keeps the always-on discipline resident for turns that don't go through the
-skill. Tune the model IDs and `effort:` levels in `agents/*.md` to your access —
-see `docs/model-routing.md`.
+Two things worth doing once, per project:
+
+- **Add `.claude/worktree-setup.sh`** if your project needs more than linked
+  dependencies to run its tests in a fresh checkout — a codegen step, a database
+  template, a build. It receives `<main-repo-root> <new-worktree-dir>` and
+  replaces the built-in defaults.
+- **Tune the model IDs and `effort:` levels** in `agents/*.md` to your access —
+  see `docs/model-routing.md`.
+
+Do **not** put `ORCHESTRATION.md` in your `CLAUDE.md`. It is read by the session
+root, which is the only context that classifies work or decides delegation; every
+sub-agent's protocol already lives in its own `agents/*.md`, where it caches.
+
+### If runs feel slow or expensive
+
+Look at wall-clock and token cost separately — they have different causes.
+Slowness is usually worktrees (a fresh checkout per unit) and the serial review
+loop; cost is usually agent count. In order: check that
+`.worktrees/` is flat and not nested, that sequential phases aren't getting their
+own worktrees, that `ORCHESTRATION.md` isn't in `CLAUDE.md`, and that child
+orchestrators are rare. Then lower `MAX_REVIEW_ITERATIONS` and
+`MAX_CONCURRENT_AGENTS`. Model choice is the last dial, not the first.
 
 ## Status
 

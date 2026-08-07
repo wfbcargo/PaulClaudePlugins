@@ -1,11 +1,17 @@
 # ClaudeArchitect — Orchestration Framework
 
 This is the methodology the `claude-architect` agents run inside. The agents are
-the moving parts; this document is the machine they assemble into. To adopt the
-framework, append the sections you want into your project's `CLAUDE.md` (or point
-your `CLAUDE.md` at this file). The agents in `agents/` are auto-discovered by
-Claude Code once the plugin is installed; this doc is what teaches the top-level
-session how to use them.
+the moving parts; this document is the machine they assemble into. The agents in
+`agents/` are auto-discovered by Claude Code once the plugin is installed; this
+doc is what teaches the top-level session how to use them.
+
+**Do NOT paste this file into your project's `CLAUDE.md`, and do not point
+`CLAUDE.md` at it.** `CLAUDE.md` is injected into every sub-agent, so residency
+there multiplies this document's cost by the agent count of the whole run — tens
+of thousands of tokens per run, spent on agents that need none of it. A leaf does
+not classify work, choose branch names, or decide delegation; its protocol is
+already in its own `agents/*.md`, where it caches. The `/architect` skill reads
+this file once, in the session root, which is the only context that uses it.
 
 The one idea underneath everything: **treat a coding session like a small
 engineering org.** One long-horizon manager decomposes the work, hands each piece
@@ -36,8 +42,9 @@ reconstructing the commands:
 
 | Script | Does |
 |--------|------|
-| `scripts/new-worktree.sh <tier> <slug> [parent]` | Dirty-check, id, branch, worktree, `[target:]` commit, work-log dirs. Prints `branch=` / `worktree=` / `unit_id=` / `target=`. |
+| `scripts/new-worktree.sh <tier> <slug> [parent]` | Dirty-check, id, branch, worktree, `[target:]` commit, work-log dirs, dependency setup. Prints `branch=` / `worktree=` / `unit_id=` / `target=`. |
 | `scripts/squash-up.sh <branch> <msg> [--keep-worktree]` | Squash into the derived parent, commit, remove worktree, delete branch. Exits 2 on conflict having committed nothing. |
+| `scripts/worktree-setup.sh <main> <worktree>` | Called automatically by `new-worktree.sh`. Links dependency trees, copies env files. Override per project with `.claude/worktree-setup.sh`. |
 
 ---
 
@@ -45,14 +52,23 @@ reconstructing the commands:
 
 | Knob | Default | Meaning |
 |------|---------|---------|
-| `MAX_REVIEW_ITERATIONS` | 5 | Review-loop passes before escalating to a human |
+| `MAX_REVIEW_ITERATIONS` | 2 | Review-loop passes before escalating to a human |
 | `MAX_MERGE_ATTEMPTS` | 3 | PR conflict-resolution attempts before escalating |
-| `MAX_CONCURRENT_AGENTS` | 20 | Sub-agents alive at once across all worktrees |
+| `MAX_CONCURRENT_AGENTS` | 6 | Sub-agents alive at once across all worktrees |
 | `MAX_CONTEXT_REQUEST_DEPTH` | 4 | Hops a `paused_for_context` request may propagate up before escalating |
 | `MAX_ORCHESTRATOR_DEPTH` | 4 | Nested orchestrator levels before forcing flatten/escalate (guard-band under the runtime nested-subagent cap of 5) |
 | `MAX_CONTINUATIONS` | 3 | Times one unit may be resumed from a continue file before the decomposition is declared wrong |
 
 Override per-project in `.claude/settings.json`.
+
+Two of these are deliberately low. `MAX_REVIEW_ITERATIONS` is 2 because the loop
+is strictly serial — tag, review, fix, re-test, repeat — so each pass is added
+wall-clock on the critical path, and a finding set that survives two passes is
+one a human should look at rather than a third robot. `MAX_CONCURRENT_AGENTS` is
+6 because the real ceiling is not model throughput but disk: concurrent leaves
+each run tests in their own worktree, and 20 of those will thrash a machine long
+before the orchestrator notices. Raise them if your runs are genuinely
+converging and your I/O has headroom.
 
 ---
 
@@ -94,32 +110,43 @@ split still recovers most of the saving, because it applies to the volume role).
 
 ### Delegate or execute: child orchestrator vs leaves
 
-This decision is **keyed to the work taxonomy**, not re-derived per task. Defaults:
+**Leaves are the default. A child orchestrator is the exception, and it must earn
+itself.** An orchestrator that spawns a child pays for a fresh top-tier context
+that re-establishes what the parent already knew, plus decomposition reasoning,
+integration, scoped audits, work-log writes and a continue-file rewrite at every
+boundary — and then the parent pays again to read the receipt. That layer writes
+no code. It is worth paying for exactly when the sub-problem is too big for one
+manager to hold, and it is pure overhead otherwise.
 
-| The unit an orchestrator owns | Each sub-unit gets | Default |
-|-------------------------------|--------------------|---------|
-| Epic | a child orchestrator per spec | **yes** |
-| Spec decomposing into ≥2 phases with shared files or sequencing | a child orchestrator per phase group | **yes** |
-| Spec that is one implementation, or a task | `implementation` / `fix` leaves, or do it in place | **yes** |
+Spawn a child orchestrator only when **both** hold:
 
-Flatten a default `yes` to leaves only when: the subtree is a single diff; the
-phases share no files and need no sequencing (they're parallel leaves, not a
-team); or a child would exceed the depth cap.
+1. the sub-unit would itself spawn **≥3 leaves**, and
+2. those leaves need **file partitioning or sequencing** between them — i.e.
+   somebody has to referee, and that somebody is not you.
 
-**Nesting to depth 2–3 is the framework working, not a smell.** The failure mode
-in practice is the opposite of runaway nesting: a root that keeps every spec for
-itself, spawns only leaves, and blows its own context window integrating work it
-should have delegated. If a run produced no child orchestrators and the work was
-an epic or a multi-phase spec, the decomposition was wrong.
+| The unit an orchestrator owns | Default |
+|-------------------------------|---------|
+| Epic whose specs are each ≥3 coordinated leaves | a child orchestrator per spec |
+| Epic whose specs are 1–2 leaves each | **own it — spawn those leaves directly** |
+| Spec decomposing into ≥3 phases needing partition/sequencing | a child orchestrator per phase group |
+| Spec of 1–2 phases, or a task | **leaves, or do it in place** |
 
-**But the table says what shape a sub-unit gets — not to manufacture sub-units.**
+Parallelism does NOT require a child orchestrator. Independent tracks that
+partition by file are parallel *leaves*, spawned in one message — you get the
+concurrency without paying for a manager. Reach for a child only when the
+refereeing itself is the work.
+
+**Depth 2 is normal; depth 3 wants a reason.** The framework's own guard is
+`MAX_ORCHESTRATOR_DEPTH`, but the practical guard is this: at every level ask
+what the manager does that its parent could not. If the answer is "hold two
+leaves", it is not a manager.
+
+**And the table says what shape a sub-unit gets — not to manufacture sub-units.**
 Delegate the units the decomposition actually produced. Do not split a modest job
 into pieces to have something to hand off, do not spawn a child to verify work
 the review pipeline already gates, and do not wrap a single sub-unit in a child
-orchestrator that adds a hop and no parallelism. Every spawn pays twice: once for
-a fresh context to re-establish what the parent already knew, and again for the
-parent to read the result. Full rules in `agents/orchestrator.md` → *Spawn
-discipline*.
+orchestrator that adds a hop and no parallelism. Full rules in
+`agents/orchestrator.md` → *Spawn discipline*.
 
 **Delegating is not escalating.** A structural decision *inside* a subtree being
 handed to a child is delegated with that child's mandate. Escalation is only for
@@ -243,24 +270,45 @@ Units are defined by **kind** (the role the work plays), not size.
 | **Implementation** | execution of intent | smallest unit with its own worktree; squashes into its spec as one commit | Can it be built and verified against the spec without its own statement of intent? |
 | **task** | trivial change | no intent doc, nothing review-worthy; rare | Would writing a spec entry for it be pure overhead? |
 
+**Kind decides the tier. Footprint decides the machinery.** These are two
+different questions and conflating them is what makes a 60-line change cost an
+epic's worth of process. A unit's *kind* is what it is; its *footprint* is how
+much of the codebase it moves. Classify by kind — then size the pipeline to the
+footprint:
+
+| Footprint of the whole unit | Machinery |
+|---|---|
+| ≲5 files, no shared/public surface, no migration | Do it in place on one branch. No child worktrees, no review loop, no PR ceremony. |
+| Moderate, or touches a shared surface | Worktree + review before merge. Skip the full pre-PR loop unless the diff is large. |
+| Large, or crosses module boundaries, or is user-facing | The full pipeline as written below. |
+
+Footprint is an estimate, not a measurement, and it is allowed to be wrong —
+promote upward the moment it proves low (see *Reclassification*). What is not
+allowed is running the heavy pipeline by default because the estimate was never
+made.
+
 **Classification procedure:**
 
 1. Count intents — one → standalone spec; many interdependent → epic decomposed
    into specs; trivial → task.
-2. Decompose each spec into implementations (sequential `Phase 1, 2, 3` or
+2. Estimate the footprint per the table above; it sets the machinery for
+   everything below.
+3. Decompose each spec into implementations (sequential `Phase 1, 2, 3` or
    parallel `Phase 1.1, 1.2`).
-3. **Assign an owner role to every sub-unit: `orchestrator` or `leaf`**, per the
-   defaults in *Delegate or execute* above. Write the assignment down — one line
-   per sub-unit in the work-log, e.g. `spec 7e0e8fb3 api-surface: orchestrator`.
-   This step is not optional and not implicit: a sub-unit with no recorded role
-   is a delegation decision that was defaulted past rather than made.
-4. Emit the artifact — create the branch, write `.wiki/specs/<id>.md` before
+4. **Assign an owner role to every sub-unit: `orchestrator` or `leaf`**, per the
+   defaults in *Delegate or execute* above — where `leaf` is the default and a
+   child orchestrator must meet both of its two conditions. Write the assignment
+   down, one line per sub-unit in the work-log, e.g. `spec 7e0e8fb3 api-surface:
+   leaf ×2`. This step is not optional and not implicit: a sub-unit with no
+   recorded role is a delegation decision that was defaulted past rather than
+   made.
+5. Emit the artifact — create the branch, write `.wiki/specs/<id>.md` before
    spawning implementation work.
 
 This taxonomy IS the orchestrate-vs-execute axis: epics and multi-impl specs are
 orchestration (top tier); single implementations are execution (bounded tier).
-Classifying the work, choosing the owner role, and routing the model are one
-decision made once and recorded once.
+Classifying the work, sizing the footprint, choosing the owner role, and routing
+the model are one decision made once and recorded once.
 
 **Reclassification promotes, never forces.** If an implementation grows its own
 intent → it was a spec. If a spec sprouts a second independent objective → it was
@@ -271,9 +319,39 @@ escalates; the orchestrator ratifies.
 
 ## BRANCHING WORKFLOW
 
-All coding work happens in git worktrees under `.worktrees/`, never on the active
-branch. Branch from the current active branch (parsed at runtime via
+Coding work happens on a branch in a git worktree under `.worktrees/`, never on
+the active branch. Branch from the current active branch (parsed at runtime via
 `git branch --show-current`); never hardcode `main`/`develop`.
+
+### When a unit gets a worktree
+
+**A branch is cheap; a worktree is not.** Every worktree is a fresh checkout that
+starts with no dependencies, no venv and no build cache — `worktree-setup.sh`
+links what it can, but the create/setup/remove cycle is still the single largest
+wall-clock cost in a multi-unit run. A worktree buys exactly one thing:
+**filesystem isolation between agents running at the same time.** Where nothing
+runs concurrently, it buys nothing.
+
+| Unit | Worktree? |
+|------|-----------|
+| Top-level unit (epic, or standalone spec) | **Yes** — it is the integration point and the PR source. |
+| Spec under an epic | **Yes** — its impls integrate there. |
+| Impl phase running **concurrently** with a sibling | **Yes** — this is what isolation is for. |
+| Impl phase running **sequentially** | **No** — commit into the parent's worktree, one commit per phase. |
+| `fix` agent in the review loop | **No** — see *Code review pipeline*. |
+| `merge` agent (post-PR conflicts) | **Yes** — `--additional/merge-target-aN`. |
+
+So `new-worktree.sh` is called for top-level units, for parallel impl siblings,
+and for merge agents. A sequential phase just commits. This is the difference
+between ~3 worktrees on a typical run and ~17.
+
+Worktrees always land flat in the **main** repo's `.worktrees/`, never inside
+another worktree — `new-worktree.sh` anchors on `git rev-parse --git-common-dir`
+for exactly this reason. A worktree nested in a worktree is a checkout inside a
+checkout: it duplicates disk, it makes the parent's test runners and watchers
+traverse into it, and on Windows the combined path length runs at the 260-char
+limit. If you ever see `.worktrees/` inside a worktree, something bypassed the
+script.
 
 ### Branch naming
 
@@ -287,7 +365,7 @@ collisions: `some/branch` (a file) and `some/branch--child/name` (a file inside 
 | Spec (under epic) | `<epic>--spec/<8id>_<n>` |
 | Spec (standalone) | `<active>--spec/<8id>_<n>` |
 | Impl | `<spec>--impl/<8id>_<n>` |
-| Additional (review fixes / merges) | `<impl>--additional/<n>` |
+| Additional (post-PR merges) | `<impl>--additional/<n>` |
 
 IDs are 8 random hex chars generated at branch-creation time (`openssl rand -hex 4`).
 Use an epic if work needs 3+ specs or sequential decomposition; otherwise a
@@ -301,11 +379,15 @@ stripped. Implementation → squash into spec. Spec (child of epic) → squash i
 epic. Spec (standalone) and Epic → PR into the active branch (the manual review
 checkpoint).
 
+A sequential phase that ran **in** its parent's worktree has nothing to squash —
+its commit is already on the parent branch. The merge rule applies to units that
+got their own branch, which per *When a unit gets a worktree* is the minority.
+
 ### Creating and closing units
 
 ```
-scripts/new-worktree.sh spec my-feature            # → branch= worktree= unit_id= target=
-scripts/new-worktree.sh impl phase-one "<spec-branch>"   # parent is the 3rd arg
+scripts/new-worktree.sh spec my-feature                  # → branch= worktree= unit_id= target=
+scripts/new-worktree.sh impl phase-one "<spec-branch>"   # ONLY for a parallel sibling
 scripts/squash-up.sh "<branch>" "spec: <desc> [spec-id: <id>]"
 ```
 
@@ -405,13 +487,33 @@ especially when siblings will run in parallel, since the parent must partition
 ## CODE REVIEW PIPELINE
 
 Review runs before every squash-merge. The full Review Agent loop runs before
-every PR.
+every PR. **Scale it to the footprint** (see *Work taxonomy*): a small-footprint
+unit gets tests plus a diff read, not the full loop.
 
 | Merge | Review |
 |-------|--------|
 | Impl → Spec | Tests + lint. Diff review. Fix before merge. |
-| Spec → Epic | Full test suite. Squashed-diff review. Spec-adherence audit. **Architecture-integrity audit** (structural fit + wiki truth). |
-| Epic/Spec → Active | **Architecture-integrity audit**, then Review Agent loop until clean. User reviews the PR on GitHub. |
+| Spec → Epic | Full test suite. Squashed-diff review. Spec-adherence audit. **Architecture-integrity audit** if its precondition fires (below). |
+| Epic/Spec → Active | Architecture-integrity audit if its precondition fires, then the Review Agent loop until clean. User reviews the PR on GitHub. |
+
+**Run the lenses concurrently.** `review` and `spec-audit` are both read-only,
+independent, and answer different questions — spawn them in a single message and
+triage both receipts together. Serializing them doubles the gate latency and buys
+nothing. `architecture-audit`, when it runs, joins the same batch.
+
+**`architecture-audit` is precondition-gated, not boundary-automatic.** It is the
+most expensive agent in the pipeline (top tier, high effort, reads whole wiki
+files), and on a diff that adds no structure it has nothing to find. Run it only
+when a cheap check on the squashed diff says structure actually moved:
+
+- a new top-level module, package, or directory appears;
+- a file moves between modules, or an import crosses a boundary that
+  `architecture.md` names;
+- a dependency is added to the manifest;
+- the diff touches `.wiki/architecture.md`, `conventions.md`, or `decisions/`.
+
+None of those → skip it and record the skip in the work-log. A diff that only
+changes function bodies inside one module cannot drift the architecture.
 
 Three read-only audit lenses, each answering a different question:
 
@@ -423,13 +525,20 @@ Three read-only audit lenses, each answering a different question:
   `.wiki/specs/<id>.md` + commit messages + PR body. On spec-adherence
   disagreement the auditor wins; on code quality the reviewer wins.
 - **`architecture-audit`** — does the change still *fit* the project (placement,
-  boundaries, dependency direction), and is the wiki still TRUE? Runs at
-  structural boundaries only, which is what keeps it cheap.
+  boundaries, dependency direction), and is the wiki still TRUE? Gated on the
+  precondition above, which is what keeps it cheap.
 
 Before opening a PR for a top-level unit, run the full Review Agent loop —
 steps in `docs/procedures/review-loop.md`. Never load a findings file whole:
 verdict from the agent's receipt, index for grouping, bodies only inside the
 `fix` agents.
+
+**`fix` agents do not get worktrees.** They edit files in the top-level worktree
+and do NOT commit; the orchestrator makes one commit per iteration once the batch
+returns. Isolation would buy nothing here — the groups are partitioned by
+locality so they touch disjoint files, the pre-review tag is already the rollback
+handle, and a worktree per group per iteration was the largest avoidable cost in
+the old loop. Two `fix` agents that would touch the same file were one group.
 
 ---
 
