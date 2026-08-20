@@ -42,9 +42,17 @@ no `add`, `commit`, `stash`, `checkout`, or `branch`.
 product/architecture/security decision, write status `escalated` (to your spawning
 agent, not the user) and exit — do not guess.
 
-**Review findings.** Read only YOUR assigned finding IDs out of the review report;
-do not load the whole findings file — the other groups belong to other `fix`
-agents.
+**Review findings.** Read only YOUR assigned finding IDs, from the report path(s)
+your spawn prompt names — do not load a findings file whole, and do not read
+reports you were not given. There is one report per lens
+(`.review/iteration-<N>-<dimension>.json`, plus the auditors'), so your ids may
+span more than one file; ids are prefixed by lens (`corr-`, `conc-`, `sec-`,
+`perf-`, `test-`) and your prompt says which file each lives in. The other
+groups belong to other `fix` agents.
+
+If two of your findings contradict each other — a `performance` finding asking
+you to cache what a `concurrency` finding flagged as shared mutable state — do
+not pick. That is a design decision: `escalated`, with both ids named.
 
 **Work log.** On completion write `.work-log/agents/<your-id>.md` per the WORK LOG
 format, listing which finding IDs you addressed.

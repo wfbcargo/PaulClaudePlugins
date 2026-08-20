@@ -17,7 +17,7 @@ plus leaves.
 
 ## What's in the box
 
-**Eight role-pinned subagents** (`agents/`), auto-discovered by Claude Code once
+**Nine role-pinned subagents** (`agents/`), auto-discovered by Claude Code once
 installed:
 
 | Agent | Role |
@@ -25,9 +25,10 @@ installed:
 | `orchestrator` | Team manager, optionally recursive. The only agent with the spawn tool (`Task`/`Agent`) — that grant *is* the orchestrator/leaf boundary. |
 | `implementation` | Leaf coding agent for one implementation phase. |
 | `fix` | Applies a grouped set of review findings, in the top-level worktree. |
-| `review` | Read-only code-quality reviewer; emits structured JSON findings. |
+| `review` | Read-only code-quality reviewer; emits structured JSON findings. Spawned **once per dimension** — `correctness` always, plus `concurrency` / `security` / `performance` when the diff triggers them. |
 | `spec-audit` | Read-only: does the change match the spec's *intent*? |
 | `architecture-audit` | Read-only drift gate: does the change still *fit*, and is the wiki still true? |
+| `test-audit` | Read-only: do the tests *constrain* the behaviour, or do they merely pass? Vacuous assertions and uncovered acceptance criteria. |
 | `merge` | Resolves PR conflicts preserving both sides' intent (real merge commits). |
 | `state-doctor` | Read-only reconciliation: detects git / wiki / worktree drift. |
 
@@ -54,9 +55,17 @@ sub-agent, which multiplies an 8k-token document by the whole run's agent count
 for agents whose protocol is already in their own `agents/*.md`.
 
 **At-a-moment procedures** — [`docs/procedures/`](./docs/procedures/): the review
-loop, child-orchestrator spawns, state reconciliation, parallel sessions, and
-headless operation. Each is read when its trigger fires and not before; the
-triggers stay resident in `ORCHESTRATION.md`.
+loop, child-orchestrator spawns, state reconciliation, parallel sessions, the
+container model, and headless operation. Each is read when its trigger fires and
+not before; the triggers stay resident in `ORCHESTRATION.md`.
+
+**A second skill for the hardest artifact** — [`/seam`](./skills/seam/SKILL.md).
+When two agents must meet at an interface, neither can see the other, so the
+contract has to exist before either spawns. This is the orchestrator's procedure
+for designing one that survives (narrow, data not objects, no borrowed types,
+explicit failure) and for changing one mid-flight without leaving a sibling
+building against stale text. Repeat churn on one seam is the best evidence you
+get that two containers want merging.
 
 **An optional architecture contract** — [`.wiki/containers.yaml`](./wiki-template/containers.yaml).
 Declare the project's **layers** (`user` → `orchestration` → `engine`, direction
@@ -93,7 +102,7 @@ skeleton in [`wiki-template/`](./wiki-template/).
 
 **Illustrated overview**: [`docs/framework.html`](./docs/framework.html) — a
 single self-contained page covering the run shape, the six process stages, all
-eight agent roles with their tiers and tool grants, the review boundaries, and
+nine agent roles with their tiers and tool grants, the review boundaries, and
 the tuning knobs. Open it in a browser; it's the fastest way to hand someone the
 whole model at once.
 

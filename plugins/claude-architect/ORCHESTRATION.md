@@ -539,10 +539,13 @@ unit gets tests plus a diff read, not the full loop.
 | Spec → Epic | Full test suite. Squashed-diff review. Spec-adherence audit. **Architecture-integrity audit** if its precondition fires (below). |
 | Epic/Spec → Active | Architecture-integrity audit if its precondition fires, then the Review Agent loop until clean. User reviews the PR on GitHub. |
 
-**Run the lenses concurrently.** `review` and `spec-audit` are both read-only,
-independent, and answer different questions — spawn them in a single message and
-triage both receipts together. Serializing them doubles the gate latency and buys
-nothing. `architecture-audit`, when it runs, joins the same batch.
+**Run the lenses concurrently.** Every audit lens is read-only, independent, and
+answers a different question — spawn the whole gated set in a single message and
+triage the receipts together. Serializing them multiplies gate latency and buys
+nothing. `review` (one spawn per fired dimension), `spec-audit`,
+`architecture-audit` and `test-audit` all join the same batch, bounded by
+`MAX_CONCURRENT_AGENTS`. If the gated set would exceed that bound, drop the
+lowest-signal dimension rather than serializing the batch, and say which.
 
 **`architecture-audit` is precondition-gated, not boundary-automatic.** It is the
 most expensive agent in the pipeline (top tier, high effort, reads whole wiki
@@ -558,18 +561,46 @@ when a cheap check on the squashed diff says structure actually moved:
 None of those → skip it and record the skip in the work-log. A diff that only
 changes function bodies inside one module cannot drift the architecture.
 
-Three read-only audit lenses, each answering a different question:
+**`review` is spawned per DIMENSION, not once.** Same agent, same protocol, a
+`dimension:` field in the spawn prompt that changes only the lens. `correctness`
+always runs. The other three are precondition-gated on the diff, for the same
+reason `architecture-audit` is — a lens with nothing to find is spend with no
+expected return:
 
-- **`review`** — code quality. Emits structured JSON findings to
-  `.review/iteration-<N>.json` with severity, category, file/lines,
-  `suggested_fix`, `auto_fixable`, and a verdict (`clean | needs_fixes |
-  needs_human`).
+| Dimension | Runs when the diff... |
+|---|---|
+| `correctness` | always |
+| `concurrency` | introduces async/await, threads, locks, queues, retries, caching, or a transaction boundary; or touches shared mutable state reachable from two paths |
+| `security` | touches auth/authz, crypto, session or token handling, input parsing, deserialization, file paths, shell/SQL construction, or anything reachable from an unauthenticated entry point |
+| `performance` | adds a loop over caller-controlled input, a query in a request path, a new index-less query, or a payload that grows with the dataset |
+
+Spawn the gated dimensions **in the same message** as `correctness` — they are
+independent read-only lenses and serializing them is pure added latency. Each
+writes its own `.review/iteration-<N>-<dimension>.json`; findings carry
+dimension-prefixed ids so you can group across files. Record which dimensions you
+skipped and why, the same as an `architecture-audit` skip.
+
+Two dimensions firing on a small diff is normal. All four firing on a small diff
+means the preconditions were read as "might be relevant" rather than "is present";
+re-read the diff.
+
+Four read-only audit lenses, each answering a different question:
+
+- **`review`** — code quality, through the dimension it was given. Emits
+  structured JSON findings to `.review/iteration-<N>-<dimension>.json` with
+  severity, category, file/lines, `suggested_fix`, `auto_fixable`, and a verdict
+  (`clean | needs_fixes | needs_human`).
 - **`spec-audit`** — does the change match the spec's *intent*? Source of truth:
   `.wiki/specs/<id>.md` + commit messages + PR body. On spec-adherence
   disagreement the auditor wins; on code quality the reviewer wins.
 - **`architecture-audit`** — does the change still *fit* the project (placement,
   boundaries, dependency direction), and is the wiki still TRUE? Gated on the
   precondition above, which is what keeps it cheap.
+- **`test-audit`** — do the tests actually *constrain* the behaviour, or do they
+  merely pass? Vacuous assertions, tautologies, and acceptance criteria nothing
+  covers. Green-but-empty tests clear every other lens here, which is why this
+  one exists. Precondition: **the diff adds or changes tests, or adds logic with
+  none.** A diff that only edits docs, config, or comments skips it.
 
 Before opening a PR for a top-level unit, run the full Review Agent loop —
 steps in `docs/procedures/review-loop.md`. Never load a findings file whole:

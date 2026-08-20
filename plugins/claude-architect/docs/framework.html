@@ -629,7 +629,7 @@ leaves AND someone has to referee their files</span>
   </section>
 
   <section>
-    <h2>The eight agents</h2>
+    <h2>The nine agents</h2>
     <div class="prose">
       <p>
         Each role carries two pins, both keyed to the role rather than to its depth in the tree. The
@@ -709,6 +709,14 @@ leaves AND someone has to referee their files</span>
           suggested fix, whether it is mechanically auto-fixable — and a verdict. Architectural fit is
           deliberately not its job.
         </p>
+        <p>
+          Spawned <b>once per dimension</b>, concurrently: <code>correctness</code> always, plus
+          <code>concurrency</code>, <code>security</code> or <code>performance</code> when the diff
+          trips their trigger. One agent, one protocol, four lenses — separate agents per dimension
+          would fork the protocol and let the copies drift, while a dimension field forks only the
+          hunting guidance, which is the sole part that differs. Gating matters: the cost lever here
+          is the <em>number</em> of dimensions, not the tier.
+        </p>
         <dl>
           <dt>Spawns</dt><dd>no — terminal</dd>
           <dt>Writes</dt><dd>iteration JSON only</dd>
@@ -750,6 +758,25 @@ leaves AND someone has to referee their files</span>
           <dt>Spawns</dt><dd>no — terminal</dd>
           <dt>Writes</dt><dd>findings only</dd>
           <dt>Runs at</dt><dd>spec→epic, epic→active — if structure moved</dd>
+        </dl>
+      </article>
+
+      <article class="agent">
+        <div class="agent-head">
+          <span class="agent-name">test-audit</span>
+          <span class="tier tier-top">top · medium</span>
+        </div>
+        <p>
+          Asks the question no other lens does: do the tests <em>constrain</em> the behaviour, or do
+          they merely pass? Hunts vacuous assertions that survive replacing the implementation with a
+          stub, tautologies that restate the code, and acceptance criteria nothing covers. Green-but-empty
+          tests clear review, spec-audit and CI alike — which is exactly why this gate exists. Not the
+          coverage police: a percentage that asserts nothing is the failure, not the goal.
+        </p>
+        <dl>
+          <dt>Spawns</dt><dd>no — terminal</dd>
+          <dt>Writes</dt><dd>findings only</dd>
+          <dt>Runs at</dt><dd>merges whose diff touches tests or adds untested logic</dd>
         </dl>
       </article>
 

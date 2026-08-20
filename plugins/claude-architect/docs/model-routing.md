@@ -10,7 +10,8 @@ of the spend in a run is decided by the second dial on the highest-volume role.
 |------|-------|--------|-----|
 | Orchestrator — session root AND recursive children | `claude-opus-5` | `high` | Long-horizon team manager. A bad decomposition wastes a whole subtree of leaf work, so planning tokens here are the cheapest tokens in the run. Never drop this to medium. |
 | Architecture-integrity auditor | `claude-opus-5` | `high` | The drift gate — largest blast radius in the pipeline. Cheap because it is boundary-triggered, not per-iteration; that is what buys it top model *and* high effort. |
-| Review Agent | `claude-opus-5` | `medium` | Bounded reasoning, but a missed bug is a **silent** failure that passes the gate. Low-volume (per top-level unit), so the model barely moves the bill — effort is the dial. |
+| Review Agent (per dimension) | `claude-opus-5` | `medium` | Bounded reasoning, but a missed bug is a **silent** failure that passes the gate. Low-volume (per top-level unit), so the model barely moves the bill — effort is the dial. Note the *count* is now the cost lever, not the tier: gate the extra dimensions on the diff and this row stays cheap; spawn all four every merge and you have quadrupled it. |
+| Test-integrity auditor | `claude-opus-5` | `medium` | Same silent-failure shape as review, one step further out: a vacuous test suite passes review, spec-audit and CI alike. Low-volume and precondition-gated, so the top tier is affordable. |
 | Merge sub-agent | `claude-opus-5` | `medium` | Same shape: bounded, low-volume, and its failure mode is silent — a mangled merge that still compiles. |
 | Spec-adherence auditor | `claude-sonnet-5` | `medium` | Bounded and *checkable*: this change vs this spec's stated intent. A wrong answer surfaces as a disputed finding, not a silent pass. |
 | Implementation / fix (leaf) | `claude-sonnet-5` | `medium` | Narrow, well-scoped, **highest volume** (up to `MAX_CONCURRENT_AGENTS`). Dominates spend, so this is the only row where the dials really move the bill. |
@@ -97,7 +98,7 @@ spawning nothing whatsoever and doing every phase in its own context.
   `effort:` column as-is. The effort split alone recovers a large share of the
   savings, because it applies to the highest-volume role. This is a perfectly
   reasonable configuration.
-- **Two tiers?** Put orchestration + architecture-audit + review + merge on the
+- **Two tiers?** Put orchestration + architecture-audit + review + test-audit + merge on the
   stronger model and the rest on the cheaper one — that is the silent-failure
   boundary described above.
 - **Zero-data-retention repos** can't run models with mandatory retention — pin

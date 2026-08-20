@@ -9,11 +9,21 @@ surface) does not run this loop — tests, lint, and a diff read are the gate. T
 loop is for units whose footprint earned it.
 
 1. Tag a pre-review anchor (`git tag review-i<N>-pre`) for rollback.
-2. Spawn the read-only lenses **in one message** so they run concurrently:
-   `review` → `.review/iteration-<N>.json`, plus `spec-audit`, plus
-   `architecture-audit` **only if its precondition fired** (ORCHESTRATION.md →
-   *Code review pipeline*). They are independent; serializing them doubles the
-   gate latency for nothing.
+2. **Pick the lens set from the diff**, then spawn it **in one message** so it
+   runs concurrently. Preconditions are in ORCHESTRATION.md → *Code review
+   pipeline*; check them against the squashed diff, not against the task
+   description.
+   - `review` with `dimension: correctness` → always.
+   - `review` with `dimension: concurrency | security | performance` → one spawn
+     each, only for dimensions whose precondition fired.
+   - `spec-audit` → always.
+   - `architecture-audit`, `test-audit` → only if their preconditions fired.
+
+   Each writes its own report file. Record the lenses you skipped and why — a
+   skip is a decision, and an unrecorded one is a decision you defaulted past.
+   On iterations N≥2, re-run only the lenses that returned `needs_fixes`; a lens
+   that came back `clean` on a diff the `fix` agents only narrowed stays clean,
+   and re-running the whole set every pass is the loop's biggest avoidable cost.
 3. Triage from the agents' **receipts** — their `verdict` lines, not the findings:
    - `clean` → exit to step 6.
    - `needs_human` → escalate. Show the human an uncontaminated report and apply
@@ -24,12 +34,22 @@ loop is for units whose footprint earned it.
    record the remaining minors in the work-log (or as PR comments) and exit to
    step 6. Another serial iteration to clear nits costs more than the nits do,
    and the human is about to read this PR anyway.
-5. Read only the findings **index** from the JSON (id, file, severity) — not the
-   `suggested_fix` bodies. Group by locality so groups touch disjoint files. Per
-   group spawn a `fix` agent **in the top-level worktree, not a new one** (see
-   ORCHESTRATION.md), passing it its finding IDs; each reads its own findings out
-   of the report itself. Fix agents edit but do NOT commit. When the batch
-   returns, make ONE commit, re-run tests + lint, and return to step 1 for N+1.
+5. Read only the findings **index** from each JSON (id, file, severity) — not the
+   `suggested_fix` bodies. Group by **locality across all reports**: findings
+   from different dimensions on the same file belong to ONE `fix` agent, because
+   two agents editing one file collide no matter which lens found the problem.
+   Finding ids are dimension-prefixed (`corr-1`, `sec-2`, `test-3`) so they stay
+   unique across files; pass each `fix` agent its ids **and the report path each
+   id lives in**. Per group spawn a `fix` agent **in the top-level worktree, not
+   a new one** (see ORCHESTRATION.md); each reads its own findings out of the
+   reports itself. Fix agents edit but do NOT commit. When the batch returns,
+   make ONE commit, re-run tests + lint, and return to step 1 for N+1.
+
+   Watch for **contradictory findings across dimensions** — `performance` asking
+   to cache what `concurrency` just flagged as shared mutable state is the
+   classic pair. Two lenses disagreeing is a design question, not a fix: resolve
+   it yourself or escalate it as `needs_human`. Never hand both findings to one
+   `fix` agent and let it pick.
 6. Clean exit: delete the review tags, remove `.review/`, proceed to PR.
 
 `auto_fixable: true` requires a mechanical, unambiguous fix with no new product,

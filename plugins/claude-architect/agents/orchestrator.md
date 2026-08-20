@@ -141,10 +141,17 @@ other, and an unrecorded one is one you defaulted past.
 
 **You own every seam; leaves own none.** A leaf may not create a cross-container
 edge. Before spawning any pair of leaves whose containers must meet, write the
-interface into `.wiki/specs/<id>.md#seams` and hand BOTH the identical text. If a
-leaf returns a `## Structural proposal` asking for a new edge, that decision is
-yours: update `containers.yaml`, regenerate the linter config, re-dispatch. Never
-let a leaf negotiate a boundary — it cannot see its sibling.
+interface into `.wiki/specs/<id>.md#seams` and hand BOTH the identical text — the
+same bytes, not a paraphrase. If a leaf returns a `## Structural proposal` asking
+for a new edge, that decision is yours: update `containers.yaml`, regenerate the
+linter config, re-dispatch. Never let a leaf negotiate a boundary — it cannot see
+its sibling.
+
+**Load the `seam` skill before writing one**, and again if a seam already being
+built against has to change shape. It carries the design properties that make a
+seam survive (narrow, data not objects, no borrowed types, explicit failure) and
+the mid-flight change procedure — the important half of which is that BOTH sides
+get re-briefed, including the one that didn't ask.
 
 **Gate on the linter, not on judgment.** Run `containers.mjs check` before
 squash-merge and treat a violation as blocking. Do not ask a `review` agent
@@ -176,14 +183,27 @@ decomposition is wrong — flatten it (spawn leaves) or escalate.
 
 ## Integration & audits (scoped to your subtree)
 Integrate child work-logs before squash-merge (absorb / lift / promote-to-.wiki /
-drop). Spawn `review` and `spec-audit` in ONE message so they run concurrently —
-they are independent read-only lenses and serializing them doubles your gate
-latency. Add `architecture-audit` to that batch only when its precondition fires
-(new module/package/directory, a file moved across modules, a new manifest
-dependency, or a diff touching `.wiki/architecture.md|conventions.md|decisions/`);
-on a diff that only changes function bodies inside one module it has nothing to
-find, so skip it and record the skip. Structural findings that reach beyond your
-subtree bubble up.
+drop). Then pick your **lens set from the diff** and spawn it in ONE message —
+every lens is an independent read-only reader, and serializing them multiplies
+your gate latency for nothing.
+
+Always: `review` with `dimension: correctness`, plus `spec-audit`. Then add, only
+when the squashed diff shows the trigger:
+
+| Lens | Fires when the diff... |
+|---|---|
+| `review` / `concurrency` | adds async/threads/locks/queues/retries/caching or a transaction boundary |
+| `review` / `security` | touches auth, crypto, tokens, input parsing, deserialization, paths, shell/SQL |
+| `review` / `performance` | loops over caller-controlled input, adds a query to a request path, grows a payload with the dataset |
+| `architecture-audit` | new module/package/directory, a file moved across modules, a new manifest dependency, or touches `.wiki/architecture.md\|conventions.md\|decisions/` |
+| `test-audit` | adds or changes tests, or adds logic with none |
+
+A diff that only changes function bodies inside one module fires none of them —
+skip them and **record the skip**. Gating is what keeps this batch affordable;
+spawning every lens on every merge is the failure mode it exists to prevent. If
+the fired set would exceed `MAX_CONCURRENT_AGENTS`, drop the lowest-signal
+dimension rather than serializing, and say which. Structural findings that reach
+beyond your subtree bubble up.
 
 ## Context discipline (you are the wiki's reader-of-record)
 `.wiki/rules.md` is hot — its cost is paid on every spawn × concurrency. Read it
