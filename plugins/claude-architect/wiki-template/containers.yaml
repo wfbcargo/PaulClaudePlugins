@@ -1,0 +1,89 @@
+# Container map — the machine-readable source of truth for architecture boundaries.
+#
+# Read by the orchestrator at session start; NOT read by leaf agents (they get
+# their container in `## YOUR SCOPE`). The doctrine lives in the plugin's
+# docs/containers.md; architecture.md keeps the human-readable summary.
+#
+#   node <plugin>/scripts/containers.mjs validate     <- run after every edit
+#   node <plugin>/scripts/containers.mjs emit dependency-cruiser
+#
+# Delete this file if the project does not use the container model — every part
+# of the framework degrades cleanly to its previous behaviour without it.
+
+version: 1
+
+# Dependency direction runs strictly downward through this list. A container may
+# consume its own layer (if intra_layer allows) or any layer below it, never above.
+layers:
+  - id: user
+    intra_layer: none          # none | declared
+    role: Entry points — HTTP handlers, CLI commands, queue consumers, cron jobs.
+  - id: orchestration
+    intra_layer: declared      # edges legal only where listed in `consumes`
+    role: Business logic, grouped by capability. Owns transaction boundaries.
+  - id: engine
+    intra_layer: none          # an engine container needing another means orchestration should sequence them
+    role: Operations against 3rd-party systems — DB, HTTP, auth, storage.
+
+policy:
+  root: src                    # repo-relative source root
+  skip_layers: false           # false: user may not reach engine directly
+  public_surface: [index.ts]   # the only importable file(s) in a container
+  language: typescript         # typescript | javascript | python — picks the emit target
+
+  # Sub-paths inside a container that may import nothing outside themselves —
+  # not even the rest of their own container. This is the purity boundary that
+  # keeps business rules separable from I/O sequencing; without it the
+  # orchestration layer merges the application and domain roles, and you can no
+  # longer unit-test a rule without stubbing an engine call. External packages
+  # are unaffected — only in-repo imports are checked.
+  pure_paths: [domain]
+
+containers:
+  # ---- user ---------------------------------------------------------------
+  - id: user/http-api
+    path: src/user/http-api
+    slice: null                # user containers usually fan out across slices
+    owns: REST surface, request validation, response shaping.
+    consumes:
+      - orchestration/auth
+      - orchestration/permissions
+
+  # ---- orchestration ------------------------------------------------------
+  - id: orchestration/auth
+    path: src/orchestration/auth
+    slice: auth                # aligns with engine/... containers of the same slice
+    owns: Session lifecycle, credential verification, MFA policy.
+    consumes:
+      - orchestration/permissions
+      - engine/identity-db
+      - engine/token
+    agent:
+      # Optional per-container spawn tuning, merged over the role default.
+      # Omit any key to inherit. See docs/containers.md -> Dispatch.
+      effort: high
+      notes: Invariant-dense. Rules belong in domain/ and must stay import-free.
+
+  - id: orchestration/permissions
+    path: src/orchestration/permissions
+    slice: permissions
+    owns: Role and grant evaluation.
+    consumes:
+      - engine/identity-db
+
+  # ---- engine -------------------------------------------------------------
+  - id: engine/identity-db
+    path: src/engine/identity-db
+    shared: true               # serves several slices; belongs to none
+    owns: CRUD against the identity schema. Returns engine DTOs, never domain models.
+    consumes: []
+    agent:
+      effort: low              # mechanical and well-specified once the schema is fixed
+
+  - id: engine/token
+    path: src/engine/token
+    slice: auth
+    owns: JWT signing and verification.
+    consumes: []
+    agent:
+      effort: low

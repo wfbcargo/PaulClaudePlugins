@@ -36,6 +36,7 @@ trigger is the resident part; the steps are not.
 | `docs/procedures/multi-session.md` | More than one session is running on this repo |
 | `docs/procedures/headless.md` | `CLAUDE_HEADLESS=1` |
 | `docs/model-routing.md` | Remapping model tiers, or after a classifier refusal |
+| `docs/procedures/containers.md` | The project has `.wiki/containers.yaml` and you are decomposing, assigning scope, or placing new code |
 
 Mechanical git recipes are `scripts/`, not prose — invoke them rather than
 reconstructing the commands:
@@ -44,6 +45,7 @@ reconstructing the commands:
 |--------|------|
 | `scripts/new-worktree.sh <tier> <slug> [parent]` | Dirty-check, id, branch, worktree, `[target:]` commit, work-log dirs, dependency setup. Prints `branch=` / `worktree=` / `unit_id=` / `target=`. |
 | `scripts/squash-up.sh <branch> <msg> [--keep-worktree]` | Squash into the derived parent, commit, remove worktree, delete branch. Exits 2 on conflict having committed nothing. |
+| `scripts/containers.mjs <cmd>` | Container map: `validate` / `check [--changed]` / `where <path>` / `scope <id>` / `emit`. No-ops loudly when the project has no `.wiki/containers.yaml`. |
 | `scripts/worktree-setup.sh <main> <worktree>` | Called automatically by `new-worktree.sh`. Links dependency trees, copies env files. Override per project with `.claude/worktree-setup.sh`. |
 
 ---
@@ -185,6 +187,7 @@ discover knowledge worth keeping. A starter skeleton lives in this plugin's
 ├── README.md           # Index. Links to everything else.
 ├── conventions.md      # Coding conventions, naming, formatting decisions.
 ├── architecture.md     # System layout, module boundaries, data flow.
+├── containers.yaml     # OPTIONAL. Machine-readable layer/container map — see CONTAINER MODEL.
 ├── rules.md            # Active project rules. Passed to every sub-agent at spawn.
 ├── decisions/          # One file per architectural decision (ADR-style).
 │   └── <NNNN>-<slug>.md
@@ -205,6 +208,7 @@ Every wiki file an agent might read costs context. Keep them lean:
 |------|--------|---------------|
 | `rules.md` | ~15 rules / one screen (**hottest** — see Active Rules) | Retire stale rules; demote non-invariants to conventions/architecture |
 | `architecture.md`, `conventions.md` | ~1 screen each | Push detail into a `decisions/<NNNN>` ADR and link it |
+| `containers.yaml` | grows with the architecture, not with time | A container list that keeps growing means they're cut too fine — see CONTAINER MODEL |
 | `gotchas.md`, `glossary.md` | grows slowly; one line per entry | Prune entries no longer true |
 | `decisions/<NNNN>` | one decision per file | Never merge or renumber |
 
@@ -250,6 +254,45 @@ convention → `conventions.md`. A new domain term → `glossary.md`. Wiki edits
 happen in the same worktree as the work that produced them and ride the
 squash-merge. Default is **omit**: if you can't say why a future agent will need a
 note, don't add it.
+
+---
+
+## CONTAINER MODEL (only when `.wiki/containers.yaml` exists)
+
+Optional. A project with no `.wiki/containers.yaml` behaves exactly as it did
+before this section existed — do not invent one.
+
+When the file IS present, the project's architecture is declared rather than
+implied: named **layers** with a fixed dependency direction, and **containers**
+(folders) that declare which other containers they may call. Three things are
+always-on; the rest is procedure.
+
+**1. The container is the unit of agent assignment.** Resolve scope by lookup,
+not judgment — `containers.mjs scope <id>` prints the `## YOUR SCOPE` block, and
+`where <path>` answers which container owns a file. Two leaves in containers with
+no edge between them are safe to run concurrently *by construction* — that is the
+file partition parallel siblings need, derived instead of invented.
+
+**2. Only an orchestrator may create a cross-container edge.** A leaf that needs
+a new edge has hit a structural boundary: it records a `## Structural proposal`
+and proceeds with the rest, or pauses. You decide the edge, update
+`containers.yaml`, regenerate, and re-dispatch. The code that connects containers
+is written under your authority — never a leaf's.
+
+**3. Seams are contract-first.** A unit spanning two containers gets its
+interface written into `.wiki/specs/<id>.md#seams` **before either leaf spawns**,
+and both leaves receive the same text. Skip it and agent A invents a signature
+while agent B guesses at it. This is the tax the model charges for its
+parallelism, and it is cheaper than the merge it prevents.
+
+Boundary violations are caught by a **linter**, not by you and not by a reviewer:
+`containers.mjs check`. Do not spend model tokens re-deriving what an import
+graph already answers. Placement — *which* container new code belongs in — is the
+half that needs judgment, and it belongs to classification.
+
+Containers may also carry per-container spawn tuning (`agent:` model / effort),
+merged over the role default. Full schema, dispatch procedure, and the placement
+decision: `docs/procedures/containers.md`.
 
 ---
 

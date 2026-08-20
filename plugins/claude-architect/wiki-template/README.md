@@ -12,6 +12,7 @@ Copy this directory to `.wiki/` at your repo root and fill it in.
 | File | What's in it |
 | --- | --- |
 | [architecture.md](architecture.md) | Module layout, boundaries, data flow. |
+| [containers.yaml](containers.yaml) | **Optional.** Machine-readable layer/container map: allowed edges, public surface, per-container agent tuning. Delete it if the project doesn't use the container model. |
 | [conventions.md](conventions.md) | Coding conventions, naming, formatting decisions. |
 | [rules.md](rules.md) | Active project rules (`R-NNN`). Passed to every sub-agent at spawn. |
 | [decisions/](decisions/) | ADRs — one file per architectural decision. |

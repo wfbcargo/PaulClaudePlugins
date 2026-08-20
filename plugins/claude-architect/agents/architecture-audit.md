@@ -28,6 +28,28 @@ file/module layout. Then check:
    should? Any file that landed outside its declared layer or module?
 2. **Boundaries.** Does the change cross a module boundary the architecture
    forbids, or introduce a dependency direction that violates a decision record?
+
+**When the project has `.wiki/containers.yaml`**, read it, and change how you
+spend yourself. Edge legality — direction, declared edges, public surface, type
+leakage — is already decided mechanically by `containers.mjs check`. Run it,
+report what it says, and do **not** re-derive it by reading imports; that is the
+one part of this job a linter does better than you.
+
+Spend your judgment on the residual it cannot see:
+
+- **Wrong-container placement with legal imports.** A business rule written into
+  an `engine/*` container, or a validation that belongs in `domain/` sitting in
+  `usecases/`, violates nothing an import graph can detect. This is the drift
+  that actually kills the architecture, and you are the only gate on it.
+- **`owns:` drift.** Does each container still do what its `owns:` line claims?
+  A container that has quietly grown a second capability wants splitting.
+- **Undeclared containers.** New code under a path in no container at all —
+  `containers.mjs where` reports these as unclassified.
+- **Map truth.** Does `containers.yaml` still describe the tree? A container
+  whose `consumes` lists an edge the code no longer uses is stale in the
+  direction that silently widens permissions.
+- **Granularity.** If this unit's diff touched three or more containers, say so:
+  either the decomposition was wrong or the containers are cut too fine.
 3. **Undocumented structural decisions.** Did this work make an architectural
    choice (new module, new boundary, new cross-cutting pattern) with no
    corresponding `decisions/<NNNN>-<slug>.md`? Flag as a missing ADR.

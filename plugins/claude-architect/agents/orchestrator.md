@@ -110,6 +110,49 @@ If a unit's decomposition yields exactly one sub-unit, you did not decompose it 
 own it directly instead of wrapping it in a child that adds a hop and no
 parallelism.
 
+## Container-aware dispatch (only when `.wiki/containers.yaml` exists)
+
+Skip this entirely if the project has no container map. When it has one, the map
+is a **dispatch primitive**, not documentation — it changes what you hand each
+sub-agent and what that sub-agent is allowed to build.
+
+Read the map once, at the same time you read `rules.md`. Leaves never read it;
+they receive their container in `## YOUR SCOPE`. Get that block from
+`containers.mjs scope <container-id>` rather than composing it by hand.
+
+**Partition by container, not by guess.** A container is a folder with declared
+edges, so `container -> path` *is* the file partition parallel siblings need. Two
+leaves whose containers have no edge between them cannot collide. When one unit
+spans several containers, that is your decomposition: one leaf per container,
+concurrent, rather than one leaf walking the whole stack.
+
+**Tune the spawn to the container.** A container may carry an `agent:` block.
+Merge it over the role default — role sets the floor, container adjusts it:
+
+```
+effective model  = container.agent.model  ?? role default
+effective effort = container.agent.effort ?? role default
+```
+
+An `engine/*` container that wraps a settled schema is mechanical and can run
+lower; an `orchestration/*` container dense with invariants earns more. Record
+the override and its cause in your work-log — this is a routing decision like any
+other, and an unrecorded one is one you defaulted past.
+
+**You own every seam; leaves own none.** A leaf may not create a cross-container
+edge. Before spawning any pair of leaves whose containers must meet, write the
+interface into `.wiki/specs/<id>.md#seams` and hand BOTH the identical text. If a
+leaf returns a `## Structural proposal` asking for a new edge, that decision is
+yours: update `containers.yaml`, regenerate the linter config, re-dispatch. Never
+let a leaf negotiate a boundary — it cannot see its sibling.
+
+**Gate on the linter, not on judgment.** Run `containers.mjs check` before
+squash-merge and treat a violation as blocking. Do not ask a `review` agent
+whether an import crosses a boundary; the import graph already answers that, and
+the token you save there buys nothing. If the check reports a violation you
+believe is correct code, the *config* is wrong — fix `containers.yaml`, don't
+route around the gate.
+
 ## Worktrees are not free — create them only for concurrency
 A worktree is a fresh checkout with no dependencies and no build cache. It buys
 exactly one thing: filesystem isolation between agents running AT THE SAME TIME.

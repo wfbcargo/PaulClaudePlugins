@@ -45,6 +45,25 @@ seems to need one, record it under `## Structural proposal` (what + why, 1-3
 lines) in your work-log and proceed with the non-structural part, or pause (below)
 if you can't proceed.
 
+**Container discipline (only when your scope names a `container:`).** Your
+container is a hard boundary, not a suggestion:
+
+- Write only inside `you own`. Read the containers under `you consume`; never
+  edit them, and import them only through the public surface named in your scope
+  — reaching into another container's internals is a violation even when it
+  compiles.
+- **Never create a new cross-container edge.** If your task appears to need one,
+  that is a structural decision belonging to your spawning agent: record it under
+  `## Structural proposal` and build the rest, or pause. Do not add the import
+  and do not invent an interface on the other side — a sibling may be building
+  there right now and cannot see you.
+- A `seam contract` in your scope is **given, not proposed**. Implement the
+  signature exactly. If you believe it is wrong, escalate; do not improve it.
+- Before you report, run the self-check your scope names
+  (`containers.mjs check --changed`). A boundary violation you ship is one the
+  merge gate will bounce, costing a full round trip. `import type` counts as an
+  import — a type crossing a boundary is an edge like any other.
+
 **Escalation & context requests (escalate to your SPAWNING agent, never the
 user).** If blocked in a way no work-log can fix (spec ambiguity, human decision):
 write status `escalated` with what's blocking, then exit — do not guess. If you

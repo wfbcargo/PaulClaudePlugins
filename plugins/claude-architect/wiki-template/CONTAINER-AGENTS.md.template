@@ -1,0 +1,40 @@
+<!--
+Per-container context file. Copy to `<container-path>/AGENTS.md` (or CLAUDE.md
+if your harness prefers that name) and fill in.
+
+WHY this file and not the wiki: nested context files are read by proximity —
+only when an agent touches this folder. A root CLAUDE.md is injected into every
+sub-agent, so anything container-specific placed there is multiplied by the
+whole run's agent count and paid mostly by agents working somewhere else. This
+is the same cost logic as `rules.md` being global-only.
+
+Keep it under one screen. If it grows past that, the container is doing too much.
+Everything here should be true of THIS container specifically — anything true of
+the whole project belongs in `.wiki/`, and anything mechanically checkable
+belongs in `containers.yaml` instead of prose.
+-->
+
+# <container id, e.g. orchestration/auth>
+
+**Owns:** <the capability, one line — must match the `owns:` in containers.yaml>
+
+**Public surface:** `index.ts` — the only file other containers may import.
+Adding an export here is a change to a seam, not an implementation detail.
+
+**May consume:** <copy from containers.yaml — helps an agent notice a missing
+edge before the linter does>
+
+## Internal layout
+
+- `domain/` — pure rules and invariants. Imports nothing outside this folder.
+  If a change here needs an import, it is in the wrong folder.
+- `usecases/` — sequencing, transactions, calls into consumed containers.
+
+## Local conventions
+
+- <naming, error shapes, how this container reports failure>
+- <the DTO -> domain mapping boundary, if this container has one>
+
+## Gotchas
+
+- <the thing that bit someone once and is invisible in the code>

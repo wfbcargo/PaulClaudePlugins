@@ -58,6 +58,26 @@ loop, child-orchestrator spawns, state reconciliation, parallel sessions, and
 headless operation. Each is read when its trigger fires and not before; the
 triggers stay resident in `ORCHESTRATION.md`.
 
+**An optional architecture contract** — [`.wiki/containers.yaml`](./wiki-template/containers.yaml).
+Declare the project's **layers** (`user` → `orchestration` → `engine`, direction
+downward, no skipping) and its **containers** — folders owning one capability
+each, with declared edges and a single public entry file. The map is a *dispatch
+primitive*: `container → path` is the file partition parallel leaves need, so two
+leaves in unconnected containers cannot collide by construction, and each spawn
+can be tuned to its container (`agent:` model / effort). Only an orchestrator may
+create a cross-container edge, and a seam between two containers is written into
+the spec *before* either leaf spawns — otherwise one agent invents a signature
+while its sibling guesses at it.
+
+Boundary violations are caught by a **linter, not a model**: `containers.mjs emit`
+generates config for `dependency-cruiser` (TS/JS) or `import-linter` (Python) and
+`check` runs it. `import type` counts as an edge, so a type leaking across a
+layer is caught too. Nothing here is hand-rolled import resolution — that is
+where a bespoke checker dies. Placement (*which* container new code belongs in)
+stays a model decision, because that is the half a linter genuinely cannot do.
+See [`docs/procedures/containers.md`](./docs/procedures/containers.md). Projects
+without a `containers.yaml` behave exactly as before.
+
 **Mechanical git recipes** — [`scripts/`](./scripts/): `new-worktree.sh`,
 `squash-up.sh`, and `worktree-setup.sh`. Prose the orchestrator has to
 reconstruct is both expensive and error-prone, so the branch/worktree/squash

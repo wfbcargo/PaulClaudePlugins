@@ -33,6 +33,7 @@ Then a fast preflight, in one batched set of calls:
 
 - `git status --porcelain` and `git branch --show-current`
 - `ls .worktrees/ .wiki/ .work-log/continue/ 2>/dev/null`
+- `node ${CLAUDE_SKILL_DIR}/../../scripts/containers.mjs validate 2>&1 | head -20`
 
 Act on what you find:
 
@@ -42,6 +43,8 @@ Act on what you find:
 | Live `.work-log/continue/*.md` | A prior unit was interrupted. Read it and offer to resume that unit before starting new work. |
 | Orphan worktrees or branches, or the tree looks off | Spawn `state-doctor` per ORCHESTRATION.md → *Drift* before decomposing. |
 | No `.wiki/` | Offer to seed it from `${CLAUDE_SKILL_DIR}/../../wiki-template/`. Do not proceed silently without one — `rules.md` is what every spawn carries. |
+| `containers.mjs` says no map | The project doesn't use the container model. Fine — skip every container step below. Do NOT offer to introduce one mid-request; that is its own spec. |
+| `containers.mjs` reports **Invalid** | Stop. A broken map mis-scopes every agent you are about to spawn. Show the problems and fix them first — it is a config edit, usually one line. |
 
 ## 1. Classify — kind, then footprint
 
@@ -73,6 +76,35 @@ into implementations and assign every sub-unit an owner role (`orchestrator` or
 `leaf`) per *Delegate or execute*, where **leaf is the default** and a child
 orchestrator must clear both of its conditions.
 
+### Third axis: placement (only when the project has a container map)
+
+Kind sets the tier, footprint sets the machinery, **placement sets the
+partition.** Name a container for every intent before you decompose — once each
+intent has one, the file split for parallel leaves is a lookup rather than a
+judgment call, and `containers.mjs scope <id>` writes the scope block for you.
+
+Per intent, in order:
+
+1. **Talks to the outside world?** Inbound (HTTP, CLI, queue) → `user`.
+   Outbound (DB, 3rd-party API, token check) → `engine`.
+2. **Otherwise it is business logic** → `orchestration`, in the container whose
+   `owns:` line covers it (`containers.mjs list`).
+3. **An existing file?** Ask the map: `containers.mjs where <path>`.
+4. **Nothing fits?** That is a structural decision — a new container plus a
+   `decisions/<NNNN>` ADR, and it is a spec of its own, not a side effect of
+   this one. Say so rather than quietly widening an existing container.
+
+Two things fall straight out of the answer, and both belong in your plan:
+
+- **Cross-container intents need a seam written first.** Any unit spanning two
+  containers gets its interface into `.wiki/specs/<id>.md#seams` *before* either
+  leaf spawns, handed identically to both.
+- **A unit touching ≥3 containers is a warning, not a plan.** Either the
+  decomposition is wrong or the containers are cut too fine. Say which.
+
+Read `docs/procedures/containers.md` before dispatching if any of this is
+non-obvious for this request.
+
 If the request is too vague to classify — you cannot name the objective or say
 what "done" checks — ask the user for that, and only that, before continuing.
 Do not classify defensively upward to cover ambiguity.
@@ -86,7 +118,9 @@ does not block: state it, then proceed unless the user stops you.
 
 ```
 <tier> · <footprint> · <n> files
+containers: <container>: leaf, <container>: leaf, …   (omit this line if no map)
 decomposition: <sub-unit>: leaf, <sub-unit>: leaf, …
+seams: <a> ↔ <b> — contract written first    (omit when nothing crosses)
 cost: ~<n> agents, <n> worktrees, ≤<n> review passes
 go
 ```
