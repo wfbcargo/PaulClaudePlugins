@@ -1,0 +1,13 @@
+{
+  "name": "claude-boundaries",
+  "version": "0.1.0",
+  "description": "Makes an architecture's layer, container and contract boundaries mechanically enforceable — and makes every coding agent inherit them. A declared container map drives a zero-dependency import checker that runs as a hook: a violating edit is fed straight back to the agent, and no agent may finish a turn with a violating tree.",
+  "author": {
+    "name": "Paul Lovy",
+    "url": "https://paullovy.com"
+  },
+  "homepage": "https://github.com/wfbcargo/PaulClaudePlugins",
+  "repository": "https://github.com/wfbcargo/PaulClaudePlugins",
+  "license": "MIT",
+  "keywords": ["architecture", "boundaries", "layers", "containers", "fitness-function", "dependency-direction", "hooks", "lint"]
+}

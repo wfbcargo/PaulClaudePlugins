@@ -1,0 +1,105 @@
+# Container map — `packages` topology, for a workspace where each container is
+# a published or workspace-linked package rather than a folder under one src/.
+#
+# What changes versus the `folders` template:
+#   - a container's `path` is its package directory, and `policy.root` does not
+#     apply to it
+#   - each container has a package NAME, read off its package.json when the map
+#     does not state one, and that name is how other containers import it
+#   - R8 turns on: package.json's runtime dependencies must agree with the map
+#   - R6 turns on: a relative import may not leave its package, because that is
+#     exactly how the dependency graph gets bypassed
+#
+# Copy to `.wiki/containers.yaml` and edit.
+
+version: 1
+
+# Ordered TOP-DOWN: the composition root first, the zero-dependency package
+# last. This is the reverse of how a dependency list reads, and inverting it by
+# accident makes every legal edge look upward.
+#
+# Note what a single layer with `intra_layer: none` buys you: putting the
+# kernel and every connector in one `runtime` layer states three rules at once —
+# the kernel imports no connector, no connector imports the kernel, and no
+# connector imports another. Two layers would have said less, not more.
+layers:
+  - id: app
+    intra_layer: none
+    role: Composition roots. May depend on everything below.
+  - id: runtime
+    intra_layer: none
+    role: The engine and its plugins — siblings that resolve each other by contract, never by name.
+  - id: contracts
+    intra_layer: none
+    role: The interfaces a plugin author imports.
+    external: [zod]
+  - id: core
+    intra_layer: none
+    role: Primitives. Depends on nothing.
+    external: none
+
+policy:
+  topology: packages
+  # Where to look for workspace packages. Also read from pnpm-workspace.yaml
+  # and package.json `workspaces` when present — this list adds to those.
+  package_roots: [packages/*, packages/connectors/*, apps/*]
+  public_surface: [src/index.ts]
+  language: typescript
+
+  # A workspace usually has legitimate edges that skip a layer (an app reaching
+  # `core` directly). Where that is true, R2 cannot do useful work and R3 does
+  # all of it instead: every edge must still be declared below.
+  skip_layers: true
+
+  test_exempt: ["**/*.test.ts"]
+
+  # Under `packages` these both default to the strict setting, and you almost
+  # certainly want them there:
+  #   unclassified: error      a package no container claims is also an
+  #                            unclassified import target — anything may import
+  #                            it with no edge to check
+  #   relative_escape: forbid  `../../other-package/src/thing` bypasses
+  #                            package.json entirely
+
+containers:
+  - id: core/core
+    path: packages/core
+    external: none           # the strongest rule available: depends on nothing
+    owns: Primitives and value types.
+    consumes: []
+
+  - id: contracts/contracts
+    path: packages/contracts
+    owns: Capability and role interfaces. Owns the schema-validation dependency.
+    consumes:
+      - core/core
+
+  - id: runtime/engine
+    path: packages/engine
+    # A concrete client library here is the primary architectural smell: this
+    # package resolves its collaborators by declared capability, so it has no
+    # legitimate need of one. If it seems to, the contract is wrong.
+    external: none
+    owns: Resolution, dispatch, projection.
+    consumes:
+      - core/core
+      - contracts/contracts
+
+  - id: runtime/postgres-store
+    path: packages/connectors/postgres-store
+    external: [pg]           # a connector exists to wrap somebody's SDK
+    owns: The store Provider, over Postgres.
+    consumes:
+      - core/core
+      - contracts/contracts
+
+  - id: app/server
+    path: apps/server
+    # `package:` is optional — it is read from apps/server/package.json when
+    # omitted. State it only when the directory and the name disagree.
+    owns: Composes the runtime into a running service.
+    consumes:
+      - core/core
+      - contracts/contracts
+      - runtime/engine
+      - runtime/postgres-store
