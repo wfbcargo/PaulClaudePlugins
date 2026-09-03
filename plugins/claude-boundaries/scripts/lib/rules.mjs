@@ -2,7 +2,7 @@
 // judges the config, and nothing else decides anything.
 //
 //   R1 direction        never import an upper layer
-//   R2 no-skip          user may not reach engine directly
+//   R2 no-skip          surface may not reach engine directly
 //   R3 declared edge    the target must be listed in `consumes`
 //   R4 public surface   a cross-container import lands on the surface file
 //   R5 purity           a `pure_paths` folder imports nothing outside itself

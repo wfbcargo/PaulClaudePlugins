@@ -60,7 +60,7 @@ export function checkRepo(root, configRel) {
 export const FOLDER_MAP = `
 version: 1
 layers:
-  - id: user
+  - id: surface
     intra_layer: none
   - id: orchestration
     intra_layer: declared
@@ -74,8 +74,8 @@ policy:
   pure_paths: [domain]
   language: typescript
 containers:
-  - id: user/api
-    path: src/user/api
+  - id: surface/api
+    path: src/surface/api
     consumes:
       - orchestration/auth
   - id: orchestration/auth

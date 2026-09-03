@@ -15,7 +15,7 @@ version: 1
 # Dependency direction runs strictly downward through this list. A container may
 # consume its own layer (if intra_layer allows) or any layer below it, never above.
 layers:
-  - id: user
+  - id: surface
     intra_layer: none          # none | declared
     role: Entry points — HTTP handlers, CLI commands, queue consumers, cron jobs.
   - id: orchestration
@@ -27,7 +27,7 @@ layers:
 
 policy:
   root: src                    # repo-relative source root
-  skip_layers: false           # false: user may not reach engine directly
+  skip_layers: false           # false: surface may not reach engine directly
   public_surface: [index.ts]   # the only importable file(s) in a container
   language: typescript         # typescript | javascript | python — picks the emit target
 
@@ -40,10 +40,10 @@ policy:
   pure_paths: [domain]
 
 containers:
-  # ---- user ---------------------------------------------------------------
-  - id: user/http-api
-    path: src/user/http-api
-    slice: null                # user containers usually fan out across slices
+  # ---- surface ---------------------------------------------------------------
+  - id: surface/http-api
+    path: src/surface/http-api
+    slice: null                # surface containers usually fan out across slices
     owns: REST surface, request validation, response shaping.
     consumes:
       - orchestration/auth
