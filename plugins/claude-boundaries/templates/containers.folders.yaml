@@ -18,7 +18,7 @@ version: 1
 # below it, never above. Getting the order backwards makes every legal edge
 # look like a violation, so read it once more before you run `validate`.
 layers:
-  - id: user
+  - id: surface
     intra_layer: none        # none | declared
     role: Entry points — HTTP handlers, CLI commands, queue consumers, cron jobs.
   - id: orchestration
@@ -35,7 +35,7 @@ layers:
 policy:
   topology: folders          # folders | packages
   root: src                  # repo-relative source root
-  skip_layers: false         # false: user may not reach engine directly
+  skip_layers: false         # false: surface may not reach engine directly
   public_surface: [index.ts] # the only importable file(s) in a container
   language: typescript       # typescript | javascript | python
 
@@ -58,10 +58,10 @@ policy:
   test_exempt: ["**/*.test.*", "**/*.spec.*"]
 
 containers:
-  # ---- user ---------------------------------------------------------------
-  - id: user/http-api
-    path: src/user/http-api
-    slice: null                # user containers usually fan out across slices
+  # ---- surface ---------------------------------------------------------------
+  - id: surface/http-api
+    path: src/surface/http-api
+    slice: null                # surface containers usually fan out across slices
     owns: REST surface, request validation, response shaping.
     consumes:
       - orchestration/auth

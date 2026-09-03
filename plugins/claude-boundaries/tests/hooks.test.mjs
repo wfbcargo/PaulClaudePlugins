@@ -30,14 +30,14 @@ function runHook(name, input) {
 
 const clean = () => makeRepo({
   '.wiki/containers.yaml': FOLDER_MAP,
-  'src/user/api/index.ts': 'import { login } from "../../orchestration/auth/index";\nexport const routes = login;',
+  'src/surface/api/index.ts': 'import { login } from "../../orchestration/auth/index";\nexport const routes = login;',
   'src/orchestration/auth/index.ts': 'export const login = 1;',
   'src/engine/db/index.ts': 'export const find = 1;',
 });
 
 const dirty = () => makeRepo({
   '.wiki/containers.yaml': FOLDER_MAP,
-  'src/user/api/index.ts': 'export const routes = 1;',
+  'src/surface/api/index.ts': 'export const routes = 1;',
   'src/orchestration/auth/index.ts': 'export const login = 1;',
   'src/engine/db/index.ts': 'import { login } from "../../orchestration/auth/index";\nexport const find = login;',
 });
@@ -48,7 +48,7 @@ test('SessionStart states the rules as additionalContext', () => {
   const out = JSON.parse(stdout);
   assert.equal(out.hookSpecificOutput.hookEventName, 'SessionStart');
   const ctx = out.hookSpecificOutput.additionalContext;
-  assert.match(ctx, /user > orchestration > engine/);
+  assert.match(ctx, /surface > orchestration > engine/);
   assert.match(ctx, /downward only/);
   assert.match(ctx, /structural decision/);
 });
@@ -88,7 +88,7 @@ test('PostToolUse exits 2 with the reason when the edited file violates', () => 
 
 test('PostToolUse is silent on a clean file, and on files outside the map', () => {
   const root = clean();
-  assert.equal(runHook('post-edit.mjs', { cwd: root, tool_input: { file_path: join(root, 'src/user/api/index.ts') } }).code, 0);
+  assert.equal(runHook('post-edit.mjs', { cwd: root, tool_input: { file_path: join(root, 'src/surface/api/index.ts') } }).code, 0);
   assert.equal(runHook('post-edit.mjs', { cwd: root, tool_input: { file_path: join(root, '.wiki/containers.yaml') } }).code, 0);
   assert.equal(runHook('post-edit.mjs', { cwd: root, tool_input: {} }).code, 0);
 });
@@ -99,11 +99,11 @@ test('PostToolUse blames only the file that was edited', () => {
   // for unrelated findings learns to ignore the hook.
   const root = makeRepo({
     '.wiki/containers.yaml': FOLDER_MAP,
-    'src/user/api/index.ts': 'export const routes = 1;',
+    'src/surface/api/index.ts': 'export const routes = 1;',
     'src/orchestration/auth/index.ts': 'export const login = 1;',
     'src/engine/db/index.ts': 'import { login } from "../../orchestration/auth/index";\nexport const find = login;',
   });
-  const r = runHook('post-edit.mjs', { cwd: root, tool_input: { file_path: join(root, 'src/user/api/index.ts') } });
+  const r = runHook('post-edit.mjs', { cwd: root, tool_input: { file_path: join(root, 'src/surface/api/index.ts') } });
   assert.equal(r.code, 0);
 });
 

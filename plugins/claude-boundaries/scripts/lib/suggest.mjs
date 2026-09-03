@@ -15,7 +15,7 @@ import { norm } from './model.mjs';
 
 const SKIP = new Set(['node_modules', 'dist', 'build', 'out', 'coverage', '.git', '__pycache__', '.venv', 'venv']);
 const LAYER_HINTS = [
-  [/^(api|http|rest|graphql|routes?|controllers?|handlers?|cli|cmd|web|ui|jobs?|workers?|consumers?)$/i, 'user'],
+  [/^(api|http|rest|graphql|routes?|controllers?|handlers?|cli|cmd|web|ui|jobs?|workers?|consumers?)$/i, 'surface'],
   [/^(services?|usecases?|application|core|domain|features?|modules?)$/i, 'orchestration'],
   [/^(db|database|repositories|repos?|store|storage|clients?|adapters?|infra|infrastructure|gateways?|connectors?|integrations?)$/i, 'engine'],
 ];
@@ -107,7 +107,7 @@ export function suggest(root) {
   out.push('version: 1');
   out.push('');
   out.push('layers:');
-  out.push('  - id: user           # entry points: HTTP, CLI, queue consumers, cron');
+  out.push('  - id: surface        # entry points: HTTP, CLI, queue consumers, cron');
   out.push('    intra_layer: none');
   out.push('  - id: orchestration  # business logic, grouped by capability');
   out.push('    intra_layer: declared');

@@ -30,9 +30,13 @@ turn end dirty. Nothing here relies on the agent choosing to care.
 ## The model
 
 Layers, ordered top-down, with dependency direction running downward and no
-skipping. Inside a layer, a **container** is one folder — or one workspace
-package — that owns one capability, declares which other containers it may call,
-and exposes exactly one importable entry file.
+skipping. The default three, top to bottom: **surface** (the doorways in and
+out — HTTP handlers, CLI commands, queue consumers), **orchestration** (the
+business logic, grouped by capability), and **engine** (the granular connectors
+to other systems — database, third-party APIs, auth, storage). You name your
+own; these are the starting point. Inside a layer, a **container** is one folder
+— or one workspace package — that owns one capability, declares which other
+containers it may call, and exposes exactly one importable entry file.
 
 ```
 src/orchestration/auth/          <- container `orchestration/auth`

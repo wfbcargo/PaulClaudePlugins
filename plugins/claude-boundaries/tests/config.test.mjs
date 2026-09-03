@@ -45,16 +45,16 @@ test('an upward declared edge is rejected in the config, not merely in the code'
   has(configProblems(withMap(`
 version: 1
 layers:
-  - id: user
+  - id: surface
   - id: engine
 policy: { root: src }
 containers:
-  - id: user/api
+  - id: surface/api
     path: src/api
     consumes: []
   - id: engine/db
     path: src/db
-    consumes: [user/api]
+    consumes: [surface/api]
 `)), 'upward dependency');
 });
 
@@ -208,7 +208,7 @@ test('claude-architect\'s own template still loads unchanged', () => {
   const m = model(withMap(`
 version: 1
 layers:
-  - id: user
+  - id: surface
     intra_layer: none
     role: Entry points.
   - id: orchestration
@@ -224,8 +224,8 @@ policy:
   language: typescript
   pure_paths: [domain]
 containers:
-  - id: user/http-api
-    path: src/user/http-api
+  - id: surface/http-api
+    path: src/surface/http-api
     slice: null
     owns: REST surface.
     consumes: [orchestration/auth]

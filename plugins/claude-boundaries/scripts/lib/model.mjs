@@ -229,7 +229,7 @@ export function loadModel(configPath) {
     }
 
     // Python module names cannot contain hyphens. A generated contract naming
-    // `myapp.user.http-api` matches nothing, so import-linter would report a
+    // `myapp.surface.http-api` matches nothing, so import-linter would report a
     // clean run over rules that can never fire — a silent false negative.
     if (language === 'python' && /-/.test(path)) {
       problems.push(`container \`${c.id}\`: path \`${path}\` contains a hyphen, which is not a legal Python module name — use underscores`);

@@ -25,7 +25,7 @@ function run(cwd, args) {
 
 const clean = () => makeRepo({
   '.wiki/containers.yaml': FOLDER_MAP,
-  'src/user/api/index.ts': 'import { login } from "../../orchestration/auth/index";\nexport const routes = login;',
+  'src/surface/api/index.ts': 'import { login } from "../../orchestration/auth/index";\nexport const routes = login;',
   'src/orchestration/auth/index.ts': 'export const login = 1;',
   'src/orchestration/billing/index.ts': 'export const charge = 1;',
   'src/engine/db/index.ts': 'export const find = 1;',
@@ -39,7 +39,7 @@ test('check exits 0 on a clean repo and 1 on a violating one', () => {
 
   const bad = run(makeRepo({
     '.wiki/containers.yaml': FOLDER_MAP,
-    'src/user/api/index.ts': 'export const routes = 1;',
+    'src/surface/api/index.ts': 'export const routes = 1;',
     'src/orchestration/auth/index.ts': 'export const login = 1;',
     'src/orchestration/billing/index.ts': 'export const charge = 1;',
     'src/engine/db/index.ts': 'import { login } from "../../orchestration/auth/index";\nexport const find = login;',
@@ -91,7 +91,7 @@ test('no map at all exits 2 and says how to start one', () => {
 test('--json emits machine-readable findings and still exits 1', () => {
   const r = run(makeRepo({
     '.wiki/containers.yaml': FOLDER_MAP,
-    'src/user/api/index.ts': 'export const routes = 1;',
+    'src/surface/api/index.ts': 'export const routes = 1;',
     'src/orchestration/auth/index.ts': 'export const login = 1;',
     'src/orchestration/billing/index.ts': 'export const charge = 1;',
     'src/engine/db/index.ts': 'import { login } from "../../orchestration/auth/index";\nexport const find = login;',

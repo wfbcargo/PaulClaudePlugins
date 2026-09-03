@@ -14,7 +14,7 @@ after(cleanup);
 
 const base = {
   '.wiki/containers.yaml': FOLDER_MAP,
-  'src/user/api/index.ts': 'export const routes = 1;',
+  'src/surface/api/index.ts': 'export const routes = 1;',
   'src/orchestration/auth/index.ts': 'export const login = 1;',
   'src/orchestration/auth/domain/rule.ts': 'export const isValid = 1;',
   'src/orchestration/billing/index.ts': 'export const charge = 1;',
@@ -26,7 +26,7 @@ const repo = (overrides) => checkRepo(makeRepo({ ...base, ...overrides }));
 
 test('the baseline map is clean', () => {
   const r = repo({
-    'src/user/api/index.ts': 'import { login } from "../../orchestration/auth/index";\nexport const routes = login;',
+    'src/surface/api/index.ts': 'import { login } from "../../orchestration/auth/index";\nexport const routes = login;',
     'src/orchestration/auth/index.ts': 'import { find } from "../../engine/db/index";\nexport const login = find;',
   });
   assert.deepEqual(r.rules, []);
@@ -44,13 +44,13 @@ test('R1 direction — an upward import is caught; downward is not', () => {
   );
 });
 
-test('R2 no-skip — user reaching engine is caught; user reaching orchestration is not', () => {
+test('R2 no-skip — surface reaching engine is caught; surface reaching orchestration is not', () => {
   assert.deepEqual(
-    repo({ 'src/user/api/index.ts': 'import { find } from "../../engine/db/index";\nexport const routes = find;' }).rules,
+    repo({ 'src/surface/api/index.ts': 'import { find } from "../../engine/db/index";\nexport const routes = find;' }).rules,
     ['R2-skip'],
   );
   assert.deepEqual(
-    repo({ 'src/user/api/index.ts': 'import { login } from "../../orchestration/auth/index";\nexport const routes = login;' }).rules,
+    repo({ 'src/surface/api/index.ts': 'import { login } from "../../orchestration/auth/index";\nexport const routes = login;' }).rules,
     [],
   );
 });
@@ -185,8 +185,8 @@ test('one import produces one finding, not four', () => {
   // Reporting it four times tells the reader nothing the first told them, and
   // an agent handed four findings tries to fix four things.
   const r = repo({
-    'src/engine/db/index.ts': 'import { deep } from "../../user/api/internal";\nexport const find = deep;',
-    'src/user/api/internal.ts': 'export const deep = 1;',
+    'src/engine/db/index.ts': 'import { deep } from "../../surface/api/internal";\nexport const find = deep;',
+    'src/surface/api/internal.ts': 'export const deep = 1;',
   });
   assert.equal(r.findings.length, 1);
   assert.equal(r.rules[0], 'R1-direction');
