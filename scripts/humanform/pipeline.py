@@ -52,7 +52,7 @@ def _finish_look(human, s, eyes):
         look.skin(human, s["skin"])
 
 
-def _macros(human, names=("age", "weight", "muscle", "height", "firmness", "proportions")):
+def _macros(human, names=("age", "weight", "muscle", "height", "firmness", "proportions", "cupsize")):
     _, _, HOP, _ = scaffold.services()
     return {n: round(float(HOP.get_value(n, entity_reference=human)), 3) for n in names}
 
