@@ -171,6 +171,14 @@ def weight_macro(bmi):
     return float(np.interp(bmi, [17.0, 25.0, 35.0], [0.0, 0.5, 1.0]))
 
 
+def create_macros(sheet_resolved):
+    """The MPFB macros a sheet sets before any fit: sex, age, weight from BMI, muscle from the build."""
+    s = sheet_resolved
+    build = s.get("build") if isinstance(s.get("build"), str) else "average"
+    return {"gender": 1.0 if s["sex"] == "male" else 0.0, "age": age_macro(s.get("age")),
+            "weight": weight_macro(s.get("bmi") or 25.0), "muscle": BUILD_MUSCLE.get(build, 0.5)}
+
+
 def create(sheet_resolved, name=None):
     HumanService, TargetService, HOP, _ = services()
     s = sheet_resolved
@@ -179,11 +187,7 @@ def create(sheet_resolved, name=None):
     if old is not None:
         bpy.data.objects.remove(old, do_unlink=True)
     macro = TargetService.get_default_macro_info_dict()
-    macro["gender"] = 1.0 if s["sex"] == "male" else 0.0
-    macro["age"] = age_macro(s.get("age"))
-    macro["weight"] = weight_macro(s.get("bmi") or 25.0)
-    build = s.get("build") if isinstance(s.get("build"), str) else "average"
-    macro["muscle"] = BUILD_MUSCLE.get(build, 0.5)
+    macro.update(create_macros(s))
     human = HumanService.create_human(macro_detail_dict=macro)
     human.name = name
     human["humanform_sheet"] = __import__("json").dumps(s)

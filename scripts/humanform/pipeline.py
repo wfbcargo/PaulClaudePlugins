@@ -51,7 +51,22 @@ def make(s, out_dir=None, store=False, use_library=True, contact_sheet=False, ta
     if nearest and nearest[0] < WARM:
         card = library.load(nearest[1]["id"])
         library.apply(human, card)
-        start = card.get("solver_params")
+        start = dict(card.get("solver_params") or {})
+        # The stored body is a starting shape, not an identity: its age macro is not fitted at all, and the
+        # fit's priors pull weight and muscle back toward where they start. Warm-started from Wren (61) and
+        # Mara (athletic), a 34-year-old came out with a 60-year-old's skin and a soft 77-year-old with an
+        # athlete's muscle. Put the brief's own macros back, as `create` would have set them.
+        own = scaffold.create_macros(r["sheet"])
+        _, TargetService, HOP, _ = scaffold.services()
+        changed = False
+        for mname in ("age", "weight", "muscle"):
+            if abs(HOP.get_value(mname, entity_reference=human) - own[mname]) > 0.02:
+                HOP.set_value(mname, own[mname], entity_reference=human)
+                changed = True
+            if mname in start:
+                start[mname] = own[mname]
+        if changed:
+            TargetService.reapply_macro_details(human)
         jac = card.get("jacobians") or {}
         path = "warm"
         if nearest[0] < REUSE:

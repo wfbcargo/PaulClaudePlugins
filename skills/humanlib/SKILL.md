@@ -135,6 +135,12 @@ its Jacobian and iterating toward an unreachable 0.5 tolerances, a warm fit took
 measurements) than a fresh one. With the stored Jacobian, Broyden updates, and stopping at 0.75
 tolerances or when a step gains under 2%, it takes 8-49.
 
+**A warm start borrows a shape, not an identity.** The fit never touches MPFB's age macro, and its
+priors pull weight and muscle back toward where they start, so a 34-year-old warm-started from Wren
+(61) came out with a 60-year-old's skin, and a soft 77-year-old from athletic Mara with her muscle.
+`pipeline.make` now resets age, weight and muscle to the brief's own (`scaffold.create_macros`) after
+applying the stored body.
+
 **Learn from rejections, slowly.** In the first batch every mottled-cheek rejection used
 `cheek-volume`; the statistics shrink such targets only after 10 judged designs and never below
 half their amplitude, so one unlucky batch cannot erase a feature.
