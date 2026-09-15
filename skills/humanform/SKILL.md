@@ -61,13 +61,35 @@ sheet.save(r["sheet"], r"C:/proj/assets/people/mara.sheet.json")
 | field | values |
 |---|---|
 | `sex` | `female`, `male` - required; the measurement data is per sex |
-| `age` | years; ANSUR II covers 17-58 and clamps outside it with a note |
-| `stature` | metres; `None` for the population mean |
+| `age` | years, 1-90; ANSUR II covers 17-58 - see *Ages ANSUR did not measure* |
+| `stature` | metres, 1.3-2.2 for an adult, 0.6-2.0 for a child; `None` for the population mean |
 | `weight` or `bmi` | overrides the build's BMI |
 | `build` | `slim` (BMI 20.5), `average` (population), `athletic` (24, narrow waist, broad shoulders), `muscular` (27.5), `curvy` (25.5, wide hips and seat), `soft` (27), `heavy` (31) - or a dict `{"bmi": .., "z": {variable: sd}}` |
 | `style` | `realistic`, `stylized` |
 | `measurements` | any ANSUR II variable fixed, in metres (`{"hipbreadth": 0.40}`) |
 | `seed`, `variation` | `None` for the conditional mean; a seed draws a person, `variation` 0.5 by default (1.0 is full population spread) |
+| `firmness`, `proportions` | MPFB macros 0..1 (soft .. firm; regular .. idealised) - nothing ANSUR measures; `None` is MPFB's 0.5. Set at creation, so the fit measures the body with them |
+| `muscle` | MPFB macro 0..1; `None` takes the build's. Given outright, the fit holds it (Dante's 1.0 ends at 0.95, not the muscular prior's 0.72) |
+| `skin`, `iris` | screen (sRGB) colours `(r, g, b)`, 0..1 - see *Colour* |
+
+**Ages ANSUR did not measure.** `sheet.resolve` returns `ansur`: `"measured"` for 17-58, `"aged"`
+above, `"child"` below, and for the last two a note containing `sheet.NOT_MEASURED` ("not measured
+against ANSUR"). `pipeline.make` makes both:
+
+| `ansur` | how | stature |
+|---|---|---|
+| `aged` | resolved and fitted at 58 (`values["Age"]`, the sheet keeps the real age), then MPFB's age macro set to the real age | ageing shortens the body (Walter 1.700 -> 1.688 m), so the height macro is bisected back to the brief (`scaffold.fit_stature`, 1.6995 m) |
+| `child` | no ANSUR at all: MPFB's body at that age; weight from BMI read against the median BMI for the age (`scaffold.child_weight_macro`), muscle from the brief or build | MPFB's children are short (its 8-year-old is 1.15 m): height macro bisected to the stature (Milo 1.270 m) |
+
+Neither is ever stored in the library, and a child gets no humancheck (its presets are adult). An aged
+body's humancheck still runs, but what it measures is MPFB's ageing, not data - say so when showing it.
+
+**Colour.** Briefs and every humanform API take screen (sRGB) colours - what a picker, a photo or a
+person means by a colour - and `look.srgb_to_linear` converts them with the exact piecewise curve for
+Blender's linear Base Color (and glTF's). `c ** 2.2` is 2% off at mid-grey but a third of the true
+value at 0.05, where dark irises and deep skin tones sit. `look.skin(human, srgb)` gives a body one flat
+Principled material (`<name>_skin`, roughness 0.55); `pipeline.make` applies the brief's `skin` and
+`iris`. Flat colour only - lookdev owns real skin.
 
 **How it resolves.** ANSUR II per sex is a multivariate normal over 65 variables. What the sheet
 fixes is conditioned on, and a build's leanings are applied in conditional standard deviations,
@@ -154,6 +176,7 @@ from bl_ext.user_default.mpfb.services.targetservice import TargetService
 
 macro = TargetService.get_default_macro_info_dict()   # gender, age, muscle, weight, proportions,
 macro["gender"] = 0.0                                 # height, cupsize, firmness: 0..1; race dict
+                                                      # age: 0 is 1 year, 0.1875 11, 0.5 25, 1.0 90
 human = HumanService.create_human(macro_detail_dict=macro)       # 0.08 s, 18.5k quads, UVMap
 rig = HumanService.add_builtin_rig(human, "game_engine")          # 0.09 s, 53 bones, weights
 ```

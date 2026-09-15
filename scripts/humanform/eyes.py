@@ -1,13 +1,13 @@
 """L4 part: eyeballs in an MPFB body's sockets.
 
     eyes = eyes.add("Mara")                 # "Mara_eyes": two spheres, sclera / iris / pupil, on the head bone
-    eyes.add("Mara", iris=(0.18, 0.28, 0.35))
+    eyes.add("Mara", iris=(0.46, 0.57, 0.63))    # a screen (sRGB) colour: grey-blue
 
 MPFB2 hides a 72-vertex proxy ball in each socket (vertex groups `helper-l-eye`, `helper-r-eye`)
 behind its "Hide helpers" mask. Its centre and radius, read from the evaluated mesh after every
 target and the fit, place a clean sphere exactly where the eyelids expect the eye. The iris faces
 the body's forward direction; the pupil is a smaller cap inside it. Materials are plain Principled
-BSDF (L6 look development replaces them). The eyes are skinned 100% to the head bone
+BSDF from `look` - colours given as sRGB, converted to linear (L6 look development replaces them). The eyes are skinned 100% to the head bone
 (`spine.005`), or parented to the body when there is no rig yet.
 """
 
@@ -21,6 +21,7 @@ import numpy as np
 from mathutils import Matrix, Vector
 
 from . import body as _body
+from . import look
 
 HEAD_BONE = "spine.005"
 IRIS_HALF_ANGLE = 32.0     # degrees from the gaze axis: ~11-12 mm across on the ~32 mm MPFB eye proxy
@@ -36,18 +37,17 @@ def _helper_points(human, side):
     return b.co_unmasked[idx]
 
 
-def _material(name, colour, rough):
-    mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
-    mat.use_nodes = True
-    bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
-    bsdf.inputs["Base Color"].default_value = (*colour, 1.0)
-    bsdf.inputs["Roughness"].default_value = rough
-    mat.diffuse_color = (*colour, 1.0)
-    return mat
+# screen (sRGB) colours, converted by look.material. The iris default is a mid brown; sclera and pupil
+# were written as linear values before 0.6 and are kept at the same linear colour.
+IRIS = (0.537, 0.437, 0.313)
+SCLERA = (0.936, 0.926, 0.906)
+PUPIL = (0.100, 0.100, 0.100)
 
 
-def add(human, iris=(0.25, 0.16, 0.08), segments=32, rings=16):
+def add(human, iris=None, segments=32, rings=16):
+    """`iris`: a screen (sRGB) colour, as picked or written in a brief; None for a mid brown."""
     human = _body.obj(human)
+    iris = IRIS if iris is None else tuple(iris)
     rig = _body.rig_of(human)
     name = f"{human.name}_eyes"
     old = bpy.data.objects.get(name)
@@ -74,8 +74,9 @@ def add(human, iris=(0.25, 0.16, 0.08), segments=32, rings=16):
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
     bm.free()
-    for mat in (_material("HF_sclera", (0.86, 0.84, 0.8), 0.25), _material(f"HF_iris_{name}", iris, 0.35),
-                _material("HF_pupil", (0.01, 0.01, 0.01), 0.2)):
+    for mat in (look.material("HF_sclera", srgb=SCLERA, roughness=0.25),
+                look.material(f"HF_iris_{name}", srgb=iris, roughness=0.35),
+                look.material("HF_pupil", srgb=PUPIL, roughness=0.2)):
         me.materials.append(mat)
     ob = bpy.data.objects.new(name, me)
     for coll in human.users_collection:
