@@ -14,12 +14,18 @@ Bootstrap as in `humancheck` (reload `humanform`), then `from humanform import p
 ## One call
 
 ```python
-res = pipeline.make(sheet.new(name="Ines", sex="female", age=31, stature=1.70, build="athletic"),
+res = pipeline.make(sheet.new(name="Ines", sex="female", age=31, stature=1.70, build="athletic",
+                              firmness=0.7, skin=(0.50, 0.33, 0.24), iris=(0.38, 0.29, 0.19)),
                     out_dir=r"C:/proj/people/ines", store=False, contact_sheet=True,
                     face_part="face-female-11-6-df37e12a",     # optional stored parts
                     hand_part="hands-female-hands-21-2-b35cf548", foot_part=None)
-res["path"], res["nearest"], res["timing"], res["check"]
+res["path"], res["ansur"], res["nearest"], res["timing"], res["check"], res["macros"]
 ```
+
+The brief is the whole description: firmness, proportions and muscle go to MPFB's macros, `skin` and
+`iris` (screen colours) to flat materials, and an age outside ANSUR's 17-58 still makes a body -
+`ansur` `"aged"` (fitted at 58, aged by MPFB, stature restored) or `"child"` (MPFB only, path
+`"child"`, no check) - with a "not measured against ANSUR" note. See `humanform`'s brief table.
 
 | path | when (ANSUR z-distance to the nearest stored body, same sex and style) | measured |
 |---|---|---|
@@ -27,8 +33,9 @@ res["path"], res["nearest"], res["timing"], res["check"]
 | `warm` | < 1.6: fit starts from that body's parameters **and its stored Jacobian** | 2-5 s |
 | `fresh` | otherwise | 3.5-7.5 s |
 
-`store=True` saves the result as a body card when humancheck has no fails. Eyes are added
-(`eyes=False` to skip). A part forces a fit so its measurements are re-solved for this body; a hand
+`store=True` saves the result as a body card when humancheck has no fails and the body was measured
+against ANSUR (aged and child bodies are never stored). Eyes are added (`eyes=False` to skip).
+`res["start_macros"]` are the macros the fit began from, `res["macros"]` the finished body's. A part forces a fit so its measurements are re-solved for this body; a hand
 or foot part's size offsets move the targets first.
 
 Every fit has three stages and a settle pass: body, face (ANSUR head measures), hands and feet
@@ -116,7 +123,7 @@ Seeded in the user's library: 13 hand and 11 foot parts from Mara (female) and K
 
 ## Eyes
 
-`eyes.add(human, iris=(r, g, b))` builds `<name>_eyes` - two spheres with sclera, iris and pupil -
+`eyes.add(human, iris=(r, g, b))` (a screen colour; `None` for a mid brown) builds `<name>_eyes` - two spheres with sclera, iris and pupil -
 at the centre and radius of MPFB's hidden eye proxies, skinned to `spine.005`. Contact-sheet
 close-ups and variant grids render in material colour so the eyes read against the clay skin.
 
@@ -135,11 +142,18 @@ its Jacobian and iterating toward an unreachable 0.5 tolerances, a warm fit took
 measurements) than a fresh one. With the stored Jacobian, Broyden updates, and stopping at 0.75
 tolerances or when a step gains under 2%, it takes 8-49.
 
-**A warm start borrows a shape, not an identity.** The fit never touches MPFB's age macro, and its
-priors pull weight and muscle back toward where they start, so a 34-year-old warm-started from Wren
-(61) came out with a 60-year-old's skin, and a soft 77-year-old from athletic Mara with her muscle.
-`pipeline.make` now resets age, weight and muscle to the brief's own (`scaffold.create_macros`) after
-applying the stored body.
+**A warm start borrows a shape, not an identity.** The fit never touches MPFB's age, firmness,
+proportions, cup size or ancestry macros, and its priors pull weight and muscle back toward where they
+start, so a 34-year-old warm-started from Wren (61) came out with a 60-year-old's skin, and a soft
+77-year-old from athletic Mara with her muscle. `pipeline.make` resets those (`scaffold.reset_macros`,
+`scaffold.UNFITTED`) to the brief's own after applying the stored body - and weight and muscle too,
+unless the stored fit began from the same weight and muscle as this brief (same BMI and build), whose
+fitted values are then the right answer: resetting them anyway moved a repeated Mara's waist 1.5
+tolerances and no repeated brief reused (6.9 s instead of 1.4 s).
+
+**Verify:** `blender -b --factory-startup --python ${CLAUDE_PLUGIN_ROOT}/scripts/tests/phase4_warm_ages.py -- lib=<scratch folder>`
+(53 checks: a warm start's macros against its brief with controls, a repeated brief reusing, an 8- and
+an 81-year-old's stature, age macro and notes, the sRGB curve and material colours).
 
 **Learn from rejections, slowly.** In the first batch every mottled-cheek rejection used
 `cheek-volume`; the statistics shrink such targets only after 10 judged designs and never below
@@ -152,6 +166,7 @@ half their amplitude, so one unlucky batch cannot erase a feature.
 - Regions for parts: face, hands, feet. Hand and foot designs are limited to MPFB's targets: no
   knuckle, nail, toe-length or arch-shape designs until delta (sculpted) payloads exist. Hand and foot
   parts are symmetric; there are no left- or right-only parts.
-- Hair, eyebrows and eyelashes are not parts yet; eyes have flat Principled colours (lookdev later).
+- Hair, eyebrows and eyelashes are not parts yet; eyes and skin have flat Principled colours (lookdev later).
+- Parts on a child are applied for their look only: a hand or foot part's size offsets need a fit.
 - Head count is judged against a fixed 7.7 heads; short people legitimately read fewer (a 1.55 m
   woman with ANSUR head measurements is 7.3).

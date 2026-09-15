@@ -5,7 +5,8 @@
     human, rep = scaffold.build(r["sheet"], lm)          # create, fit, rig, rename
     print(scaffold.summarize(rep))
 
-`create` sets MPFB's macros from the sheet (sex, age, weight from BMI, muscle from the build).
+`create` sets MPFB's macros from the sheet (sex, age, weight from BMI, muscle from the brief or its
+build, firmness and proportions from the brief).
 `fit` then solves MPFB's own fine targets - segment lengths, hand and foot scale, torso and
 neck lengths, circumferences, head height - plus the height macro, against the landmark set's
 numbers, measured on the mesh the way humancheck measures them: a damped Gauss-Newton with a
@@ -159,9 +160,11 @@ def services():
 
 
 def age_macro(years):
-    """MakeHuman's age slider: 0.1875 is 11 years, 0.5 is 25, 1.0 is 90."""
+    """MakeHuman's age slider: 0 is 1 year old, 0.1875 is 11, 0.5 is 25, 1.0 is 90."""
     if years is None:
         return 0.5
+    if years < 11:
+        return float(np.clip(0.1875 * (years - 1) / 10, 0.0, 0.1875))
     if years < 25:
         return float(np.clip(0.1875 + (years - 11) / 14 * 0.3125, 0.1875, 0.5))
     return float(np.clip(0.5 + (years - 25) / 65 * 0.5, 0.5, 1.0))
@@ -171,12 +174,95 @@ def weight_macro(bmi):
     return float(np.interp(bmi, [17.0, 25.0, 35.0], [0.0, 0.5, 1.0]))
 
 
+# median BMI for age, both sexes (CDC 2000 growth charts, 50th percentile, rounded)
+CHILD_BMI = {1: 17.2, 2: 16.4, 3: 15.9, 4: 15.5, 5: 15.3, 6: 15.3, 7: 15.5, 8: 15.8, 9: 16.2, 10: 16.6, 11: 17.2,
+             12: 17.8, 13: 18.4, 14: 19.0, 15: 19.6, 16: 20.2, 17: 20.7}
+
+
+def child_weight_macro(bmi, years):
+    """A child's BMI read against the median for its age, with the adult scale's shape (17 / 25 / 35 is
+    0.68 / 1 / 1.4 of 25): MPFB's weight macro at a child's age is relative to that age."""
+    if bmi is None:
+        return 0.5
+    ages = sorted(CHILD_BMI)
+    med = float(np.interp(years, ages, [CHILD_BMI[a] for a in ages]))
+    return float(np.interp(bmi, [0.68 * med, med, 1.4 * med], [0.0, 0.5, 1.0]))
+
+
+# macros the fit never moves: set from the brief (MPFB's default when it says nothing), and put back on a
+# warm or reused start so a stored body's firmness or proportions are not inherited
+UNFITTED = ("age", "firmness", "proportions", "cupsize", "asian", "caucasian", "african")
+
+
 def create_macros(sheet_resolved):
-    """The MPFB macros a sheet sets before any fit: sex, age, weight from BMI, muscle from the build."""
+    """The MPFB macros a sheet sets before any fit: sex, age (capped at ANSUR's 58 for a fitted adult),
+    weight from BMI, muscle from the brief or its build, and the unfitted macros the brief may give."""
+    from . import sheet as _sheet
     s = sheet_resolved
     build = s.get("build") if isinstance(s.get("build"), str) else "average"
-    return {"gender": 1.0 if s["sex"] == "male" else 0.0, "age": age_macro(s.get("age")),
-            "weight": weight_macro(s.get("bmi") or 25.0), "muscle": BUILD_MUSCLE.get(build, 0.5)}
+    age = s.get("age")
+    path = _sheet.ansur_path(age)
+    if path == "aged":
+        age = _sheet.AGE_RANGE[1]
+    weight = child_weight_macro(s.get("bmi"), age) if path == "child" else weight_macro(s.get("bmi") or 25.0)
+    muscle = s.get("muscle") if s.get("muscle") is not None else BUILD_MUSCLE.get(build, 0.5)
+    out = {"gender": 1.0 if s["sex"] == "male" else 0.0, "age": age_macro(age), "weight": weight, "muscle": muscle}
+    defaults = _default_macros()
+    for k in UNFITTED[1:]:
+        out[k] = float(s[k]) if s.get(k) is not None else defaults[k]
+    return out
+
+
+def _default_macros():
+    _, TargetService, _, _ = services()
+    d = TargetService.get_default_macro_info_dict()
+    flat = {k: v for k, v in d.items() if not isinstance(v, dict)}
+    flat.update(d.get("race", {}))
+    return flat
+
+
+def reset_macros(human, sheet_resolved, names=("weight", "muscle") + UNFITTED):
+    """Put the brief's own macros back on a body started from a stored one. Returns {name: (was, now)}
+    for each that moved by more than 0.02."""
+    _, TargetService, HOP, _ = services()
+    own = create_macros(sheet_resolved)
+    changed = {}
+    for n in names:
+        was = HOP.get_value(n, entity_reference=human)
+        if abs(was - own[n]) > 0.02:
+            HOP.set_value(n, own[n], entity_reference=human)
+            changed[n] = (round(float(was), 3), round(float(own[n]), 3))
+    if changed:
+        TargetService.reapply_macro_details(human)
+    return changed
+
+
+def stature(human):
+    bpy.context.view_layer.update()
+    b = _body.Body(human)
+    return float(b.top - b.floor)
+
+
+def fit_stature(human, target, iterations=14, tol=0.0005):
+    """Bisect MPFB's height macro until the body stands `target` metres tall - for bodies no ANSUR fit
+    sizes: a child (MPFB's 8-year-old is 1.15 m, a real one about 1.28) and an aged body (MPFB's
+    ageing shortens it). Returns {macro, stature_m, target_m}."""
+    _, TargetService, HOP, _ = services()
+    lo, hi = 0.0, 1.0
+    mid, got = HOP.get_value("height", entity_reference=human), None
+    for _ in range(iterations):
+        mid = (lo + hi) / 2
+        HOP.set_value("height", mid, entity_reference=human)
+        TargetService.reapply_macro_details(human)
+        got = stature(human)
+        if abs(got - target) < tol:
+            break
+        if got < target:
+            lo = mid
+        else:
+            hi = mid
+    return {"macro": round(mid, 3), "stature_m": round(got, 4), "target_m": target,
+            "reached": abs(got - target) < 0.005}
 
 
 def create(sheet_resolved, name=None):
@@ -187,7 +273,10 @@ def create(sheet_resolved, name=None):
     if old is not None:
         bpy.data.objects.remove(old, do_unlink=True)
     macro = TargetService.get_default_macro_info_dict()
-    macro.update(create_macros(s))
+    own = create_macros(s)
+    for k in ("asian", "caucasian", "african"):
+        macro.setdefault("race", {})[k] = own.pop(k)
+    macro.update(own)
     human = HumanService.create_human(macro_detail_dict=macro)
     human.name = name
     human["humanform_sheet"] = __import__("json").dumps(s)
@@ -235,6 +324,8 @@ BUILD_PRIOR = {"heavy": {"belly": 1.0, "waist": 1.0}, "soft": {"belly": 1.5, "wa
                # a muscular brief is about muscle: without this the solver traded it for fat to hit girth
                # (Kade's muscle fell from 0.9 to 0.34 and he read as average)
                "muscular": {"muscle": 6.0}, "athletic": {"muscle": 4.0}}
+# a macro the brief gives outright: Dante's muscle 1.0 under the muscular prior alone fell to 0.72
+HOLD_PRIOR = 40.0
 
 
 class _State:
@@ -390,13 +481,17 @@ def _solve(human, st, target, spec, tol, sex, iterations=10, damping=0.3, steps=
             "jacobian": None if J is None else np.round(J, 4).tolist()}
 
 
-def fit(human, lm, iterations=10, damping=0.3, verbose=True, build=None, start=None, jacobian=None):
+def fit(human, lm, iterations=10, damping=0.3, verbose=True, build=None, start=None, jacobian=None, hold=()):
     """L2 body stage: MPFB's height, weight and muscle macros and the body targets, to the landmark set.
-    `start` is a params dict (a library body's) to begin from instead of the macros' own values."""
+    `start` is a params dict (a library body's) to begin from instead of the macros' own values. `hold`
+    names macros the brief set outright (muscle): the fit keeps them near the value the body had when
+    the fit began."""
     sex, style = lm["sex"], lm["style"]
     target = _landmarks.as_measurements(lm)
     tol = _tolerances(RESIDUALS, _pkg.presets()["presets"][style]["ratios"], sex, lm["stature"])
-    st = _State(human, MACROS, FINE, dict(PRIOR, **BUILD_PRIOR.get(build, {})))
+    prior = dict(PRIOR, **BUILD_PRIOR.get(build, {}))
+    prior.update({n: HOLD_PRIOR for n in hold})
+    st = _State(human, MACROS, FINE, prior)
     if start:
         st.set([start.get(n, v) for n, v in zip(st.names, st.x)])
     return _solve(human, st, target, RESIDUALS, tol, sex, iterations, damping,
@@ -469,12 +564,14 @@ def finish(human, rep):
 
 
 def fit_all(human, lm, build=None, start=None, jacobians=None, iterations=10, verbose=False, face=True,
-            extremities=True):
+            extremities=True, hold=()):
     """Body stage, face stage, hands-and-feet stage, then a settle pass: the face moves the chin, and
     the neck is measured under the chin, so the body is re-measured once and refined briefly if the
-    face disturbed it. A stored body therefore reproduces its residuals when it is applied again."""
+    face disturbed it. A stored body therefore reproduces its residuals when it is applied again.
+    `hold`: macros the brief set outright, kept where they start (see `fit`)."""
     jacobians = jacobians or {}
-    rep = fit(human, lm, iterations=iterations, verbose=verbose, build=build, start=start, jacobian=jacobians.get("body"))
+    rep = fit(human, lm, iterations=iterations, verbose=verbose, build=build, start=start, jacobian=jacobians.get("body"),
+              hold=hold)
     stages = {}
     if face:
         stages["face"] = fit_face(human, lm, verbose=verbose, start=start, jacobian=jacobians.get("face"))
@@ -483,7 +580,7 @@ def fit_all(human, lm, build=None, start=None, jacobians=None, iterations=10, ve
         if ext is not None:
             stages["extremities"] = ext
     if stages:
-        settle = fit(human, lm, iterations=3, verbose=verbose, build=build, jacobian=rep.get("jacobian"))
+        settle = fit(human, lm, iterations=3, verbose=verbose, build=build, jacobian=rep.get("jacobian"), hold=hold)
         settle["measurements"] += rep["measurements"] + sum(s["measurements"] for s in stages.values())
         settle["seconds"] = round(rep["seconds"] + sum(s["seconds"] for s in stages.values()) + settle["seconds"], 1)
         settle.update(stages)

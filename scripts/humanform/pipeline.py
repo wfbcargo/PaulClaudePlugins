@@ -1,8 +1,10 @@
 """One call from a brief to a checked, rigged body - reusing the library when it can.
 
-    res = pipeline.make(sheet.new(name="Ines", sex="female", age=30, stature=1.70, build="athletic"),
+    res = pipeline.make(sheet.new(name="Ines", sex="female", age=30, stature=1.70, build="athletic",
+                                  firmness=0.7, skin=(0.50, 0.33, 0.24)),
                         out_dir=r"C:/scratch/ines", store=True)
-    res["path"]      # "reuse", "warm" or "fresh"
+    res["path"]      # "reuse", "warm", "fresh" or "child"
+    res["ansur"]     # "measured", "aged" or "child" - see below
     res["timing"]    # seconds per stage
 
 The decision is made on ANSUR z-distance to the nearest stored body of the same sex and style:
@@ -13,6 +15,18 @@ The decision is made on ANSUR z-distance to the nearest stored body of the same 
     otherwise          fit from MPFB's macros
 
 A result that passes humancheck can be stored (store=True), so the next similar brief is cheap.
+
+Ages ANSUR II did not measure (17-58) still make a body, marked `ansur` other than "measured" and
+with a note saying it is not measured against ANSUR:
+
+    aged (over 58)   fitted at 58 as above, then MPFB's age macro set to the real age and the height
+                     macro bisected until the stature is the brief's again (ageing shortens the body).
+                     humancheck still runs, but its proportions are MPFB's ageing, not data.
+    child (under 17) no ANSUR at all: MPFB's body at that age (weight from BMI for age, muscle from the
+                     brief or build), height macro bisected to the stature. No humancheck (its presets
+                     are adult), no library.
+
+Neither kind is ever stored: the library indexes bodies by ANSUR z-scores they do not have.
 """
 
 from __future__ import annotations
@@ -28,13 +42,62 @@ REUSE = 0.35
 WARM = 1.6
 
 
+def _finish_look(human, s, eyes):
+    """Rigged body -> eyes and skin, from the brief's screen colours."""
+    from . import look
+    if eyes:
+        from . import eyes as _eyes
+        _eyes.add(human, iris=s.get("iris"))
+    if s.get("skin") is not None:
+        look.skin(human, s["skin"])
+
+
+def _macros(human, names=("age", "weight", "muscle", "height", "firmness", "proportions")):
+    _, _, HOP, _ = scaffold.services()
+    return {n: round(float(HOP.get_value(n, entity_reference=human)), 3) for n in names}
+
+
+def _make_child(s, r, t, t0, eyes, store, face_part, hand_part, foot_part):
+    t1 = time.time()
+    human = scaffold.create(r["sheet"])
+    notes = list(r["notes"])
+    for chosen in (face_part, hand_part, foot_part):
+        if chosen is not None:
+            part = library.load(chosen if isinstance(chosen, str) else chosen["id"])
+            library.apply(human, part)
+            if part["region"] != "face":
+                notes.append(f"{part['id']}: its look is applied, its size offsets are not (a child has no fit)")
+    rep = {"params": {}, "residuals": [], "history": [], "measurements": 0}
+    if r["sheet"].get("stature"):
+        rep["stature"] = scaffold.fit_stature(human, float(r["sheet"]["stature"]))
+        if not rep["stature"]["reached"]:
+            notes.append(f"stature {r['sheet']['stature']} m is out of MPFB's height range at this age: "
+                         f"{rep['stature']['stature_m']} m")
+    t["create"] = time.time() - t1
+    t["fit"] = 0.0
+    t3 = time.time()
+    scaffold.finish(human, rep)
+    _finish_look(human, r["sheet"], eyes)
+    t["rig"] = time.time() - t3
+    if store:
+        notes.append("not stored: the library holds bodies measured against ANSUR")
+    t["total"] = time.time() - t0
+    return {"human": human.name, "path": "child", "ansur": "child", "nearest": None, "fit": rep, "check": None,
+            "stored": None, "reuse_check": None, "start_macros": None, "macros": _macros(human),
+            "timing": {k: round(v, 2) for k, v in t.items()}, "guessed": r["guessed"], "notes": notes}
+
+
 def make(s, out_dir=None, store=False, use_library=True, contact_sheet=False, tags=(), verbose=False, eyes=True,
          face_part=None, hand_part=None, foot_part=None):
     """`face_part`, `hand_part`, `foot_part`: library parts (card or id) applied before the fit, so their
-    look is kept and the measurements - moved by a hand or foot part's offsets - are solved for this body."""
+    look is kept and the measurements - moved by a hand or foot part's offsets - are solved for this body.
+    The brief's `iris` and `skin` screen colours go on the eyes and body."""
     t = {}
     t0 = time.time()
     r = sheet.resolve(s)
+    t["sheet"] = time.time() - t0
+    if r["ansur"] == "child":
+        return _make_child(s, r, t, t0, eyes, store, face_part, hand_part, foot_part)
     lm = landmarks.from_measurements(r["values"], s["sex"], s["style"], name=s["name"])
     t["sheet"] = time.time() - t0
 
@@ -52,21 +115,22 @@ def make(s, out_dir=None, store=False, use_library=True, contact_sheet=False, ta
         card = library.load(nearest[1]["id"])
         library.apply(human, card)
         start = dict(card.get("solver_params") or {})
-        # The stored body is a starting shape, not an identity: its age macro is not fitted at all, and the
-        # fit's priors pull weight and muscle back toward where they start. Warm-started from Wren (61) and
-        # Mara (athletic), a 34-year-old came out with a 60-year-old's skin and a soft 77-year-old with an
-        # athlete's muscle. Put the brief's own macros back, as `create` would have set them.
+        # The stored body is a starting shape, not an identity: the fit never moves age, firmness,
+        # proportions, cup size or ancestry, and its priors pull weight and muscle back toward where they
+        # start. Warm-started from Wren (61) and Mara (athletic), a 34-year-old came out with a 60-year-old's
+        # skin and a soft 77-year-old with an athlete's muscle. Put the brief's own macros back, as
+        # `create` set them. Weight and muscle are the fit's own answer, though: when the stored fit began
+        # from the same weight and muscle as this brief would (same BMI and build), its fitted values are
+        # kept - resetting them anyway moved a repeated brief's waist 1.5 tolerances and it never reused.
         own = scaffold.create_macros(r["sheet"])
-        _, TargetService, HOP, _ = scaffold.services()
-        changed = False
-        for mname in ("age", "weight", "muscle"):
-            if abs(HOP.get_value(mname, entity_reference=human) - own[mname]) > 0.02:
-                HOP.set_value(mname, own[mname], entity_reference=human)
-                changed = True
-            if mname in start:
-                start[mname] = own[mname]
-        if changed:
-            TargetService.reapply_macro_details(human)
+        theirs = scaffold.create_macros(card.get("sheet") or {"sex": s["sex"]})
+        same_start = all(abs(theirs[n] - own[n]) <= 0.02 for n in ("weight", "muscle"))
+        scaffold.reset_macros(human, r["sheet"], names=scaffold.UNFITTED if same_start
+                              else ("weight", "muscle") + scaffold.UNFITTED)
+        if not same_start:
+            for mname in ("weight", "muscle"):
+                if mname in start:
+                    start[mname] = own[mname]
         jac = card.get("jacobians") or {}
         path = "warm"
         if nearest[0] < REUSE:
@@ -90,6 +154,7 @@ def make(s, out_dir=None, store=False, use_library=True, contact_sheet=False, ta
                     ext = scaffold.fit_extremities(human, lm, verbose=verbose, start=start)
                     if ext is not None:
                         rep["extremities"] = ext
+    start_macros = _macros(human, ("age", "weight", "muscle") + scaffold.UNFITTED[1:])
     t["create"] = time.time() - t1
 
     for chosen in (face_part, hand_part, foot_part):
@@ -101,14 +166,24 @@ def make(s, out_dir=None, store=False, use_library=True, contact_sheet=False, ta
         rep = None                          # a new part means the stored fit no longer holds
     t2 = time.time()
     if rep is None:
-        rep = scaffold.fit_all(human, lm, build=build, start=start, jacobians=jac, verbose=verbose)
+        hold = ("muscle",) if s.get("muscle") is not None else ()
+        rep = scaffold.fit_all(human, lm, build=build, start=start, jacobians=jac, verbose=verbose, hold=hold)
+    notes = list(r["notes"])
+    if r["ansur"] == "aged":
+        # past ANSUR: age the fitted body with MPFB, then give it back the stature it was fitted to
+        _, TargetService, HOP, _ = scaffold.services()
+        was = HOP.get_value("age", entity_reference=human)
+        HOP.set_value("age", scaffold.age_macro(r["sheet"]["age"]), entity_reference=human)
+        TargetService.reapply_macro_details(human)
+        rep["aged"] = {"age_macro_fitted": round(float(was), 3),
+                       "age_macro": round(scaffold.age_macro(r["sheet"]["age"]), 3),
+                       "stature_after_ageing_m": round(scaffold.stature(human), 4)}
+        rep["aged"]["stature"] = scaffold.fit_stature(human, float(r["sheet"]["stature"]))
     t["fit"] = time.time() - t2
 
     t3 = time.time()
     scaffold.finish(human, rep)
-    if eyes:
-        from . import eyes as _eyes
-        _eyes.add(human)
+    _finish_look(human, r["sheet"], eyes)
     t["rig"] = time.time() - t3
 
     t4 = time.time()
@@ -121,10 +196,13 @@ def make(s, out_dir=None, store=False, use_library=True, contact_sheet=False, ta
         thumb = f"{out_dir}/body.png"
         t["views"] = time.time() - t5
     card = None
-    if store and hc["counts"]["fail"] == 0:
+    if store and r["ansur"] != "measured":
+        notes.append("not stored: the library holds bodies measured against ANSUR")
+    elif store and hc["counts"]["fail"] == 0:
         card = library.save_body(human, r, rep, hc, tags=tags, thumb=thumb)
     t["total"] = time.time() - t0
-    return {"human": human.name, "path": path, "nearest": None if not nearest else
+    return {"human": human.name, "path": path, "ansur": r["ansur"], "nearest": None if not nearest else
             {"id": nearest[1]["id"], "distance": round(nearest[0], 3)},
             "fit": rep, "check": hc["counts"], "stored": card["id"] if card else None, "reuse_check": reuse_check,
-            "timing": {k: round(v, 2) for k, v in t.items()}, "guessed": r["guessed"], "notes": r["notes"]}
+            "start_macros": start_macros, "macros": _macros(human),
+            "timing": {k: round(v, 2) for k, v in t.items()}, "guessed": r["guessed"], "notes": notes}
