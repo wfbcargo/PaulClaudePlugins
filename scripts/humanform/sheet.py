@@ -42,7 +42,7 @@ AGE_RANGE = (17.0, 58.0)      # ANSUR II subjects
 AGE_LIMITS = (1.0, 90.0)
 STATURE = {"adult": (1.3, 2.2), "child": (0.6, 2.0)}
 # MPFB macros a brief may set directly (0..1): nothing ANSUR measures decides them
-MACRO_FIELDS = ("firmness", "proportions", "muscle")
+MACRO_FIELDS = ("firmness", "proportions", "muscle", "cupsize")
 COLOUR_FIELDS = ("skin", "iris")
 
 
@@ -71,17 +71,18 @@ def anthropometry():
 
 def new(name="Human", sex="female", age=None, stature=None, weight=None, bmi=None, build="average",
         style="realistic", measurements=None, seed=None, variation=0.5, budget_tris=30000, notes="",
-        firmness=None, proportions=None, muscle=None, skin=None, iris=None):
+        firmness=None, proportions=None, muscle=None, cupsize=None, skin=None, iris=None):
     """A sheet. Leave anything unknown as None; resolve() fills it and marks it guessed.
 
-    `firmness` (soft 0 .. firm 1), `proportions` (MPFB's regular 0 .. idealised 1) and `muscle` (0..1)
-    are MPFB macros; None leaves MPFB's 0.5, or for muscle the build's value. An adult's muscle is where
+    `firmness` (soft 0 .. firm 1), `proportions` (MPFB's regular 0 .. idealised 1), `muscle` (0..1) and
+    `cupsize` (a woman's bust, small 0 .. full 1 - the fit never moves it, and still fits ANSUR's chest
+    girth around it) are MPFB macros; None leaves MPFB's 0.5, or for muscle the build's value. An adult's muscle is where
     the fit starts and what its build prior holds it near. `skin` and `iris` are screen (sRGB) colours;
     None leaves the body clay and the eyes a mid brown."""
     return {"schema": SCHEMA, "name": name, "sex": sex, "age": age, "stature": stature, "weight": weight,
             "bmi": bmi, "build": build, "style": style, "measurements": dict(measurements or {}),
             "seed": seed, "variation": variation, "budget_tris": budget_tris, "notes": notes,
-            "firmness": firmness, "proportions": proportions, "muscle": muscle,
+            "firmness": firmness, "proportions": proportions, "muscle": muscle, "cupsize": cupsize,
             "skin": None if skin is None else list(skin), "iris": None if iris is None else list(iris)}
 
 

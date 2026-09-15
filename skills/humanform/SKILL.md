@@ -69,6 +69,7 @@ sheet.save(r["sheet"], r"C:/proj/assets/people/mara.sheet.json")
 | `measurements` | any ANSUR II variable fixed, in metres (`{"hipbreadth": 0.40}`) |
 | `seed`, `variation` | `None` for the conditional mean; a seed draws a person, `variation` 0.5 by default (1.0 is full population spread) |
 | `firmness`, `proportions` | MPFB macros 0..1 (soft .. firm; regular .. idealised) - nothing ANSUR measures; `None` is MPFB's 0.5. Set at creation, so the fit measures the body with them |
+| `cupsize` | MPFB macro 0..1, a woman's bust (small .. full); `None` is MPFB's 0.5. Never fitted, like firmness: ANSUR's chest girth is fitted around it |
 | `muscle` | MPFB macro 0..1; `None` takes the build's. Given outright, the fit holds it (Dante's 1.0 ends at 0.95, not the muscular prior's 0.72) |
 | `skin`, `iris` | screen (sRGB) colours `(r, g, b)`, 0..1 - see *Colour* |
 
