@@ -66,6 +66,7 @@ def from_measurements(v, sex, style="realistic", arm_angle=45.0, stance=0.02, na
     widths = {"shoulder_width": v["bideltoidbreadth"], "hip_width": v["hipbreadth"],
               "biacromial": v["biacromialbreadth"]}
 
+    limb_scale = {"upper_arm": 1.0, "forearm": 1.0, "hand": 1.0, "foot": 1.0}
     if style == "stylized":
         # shift each joint height by how far the canon sits from the measured population's mean,
         # dragging everything between them along - so a long-legged person stays longer-legged than
@@ -78,6 +79,7 @@ def from_measurements(v, sex, style="realistic", arm_angle=45.0, stance=0.02, na
         for k in ("upper_arm", "forearm", "hand", "foot"):
             scale = _t(styl[k], sex)[0] / _t(real[k], sex)[0]
             lengths[k] *= scale
+            limb_scale[k] = scale
             if k == "foot":
                 lengths["ball"] *= scale
         for k, extra in (("shoulder_width", ("biacromial",)), ("hip_width", ())):
@@ -142,7 +144,16 @@ def from_measurements(v, sex, style="realistic", arm_angle=45.0, stance=0.02, na
                          "head_breadth": v["headbreadth"] * head_scale, "head_depth": v["headlength"] * head_scale,
                          "bizygomatic": v["bizygomaticbreadth"] * head_scale,
                          "menton_sellion": v["mentonsellionlength"] * head_scale,
-                         "head_circ": v["headcircumference"] * head_scale}}
+                         "head_circ": v["headcircumference"] * head_scale,
+                         # hands and feet, scaled with the canon's hand and foot length on a stylized body
+                         "hand_breadth": v["handbreadth"] * limb_scale["hand"],
+                         "palm_length": v["palmlength"] * limb_scale["hand"],
+                         "wrist_circ": v["wristcircumference"] * limb_scale["hand"],
+                         "foot_breadth": v["footbreadthhorizontal"] * limb_scale["foot"],
+                         "ankle_circ": v["anklecircumference"] * limb_scale["foot"]}}
+
+
+EXTREMITIES = ("hand_breadth", "palm_length", "wrist_circ", "foot_breadth", "ankle_circ")
 
 
 def as_measurements(lm):
@@ -168,8 +179,9 @@ def as_measurements(lm):
          "chest_circ": ms["chest_circ"], "waist_breadth": ms["waist_breadth"], "waist_depth": ms["waist_depth"],
          "hip_depth": ms["hip_depth"], "chest_depth": ms["chest_depth"], "thigh_circ": ms["thigh_circ"],
          "calf_circ": ms["calf_circ"], "upper_arm_circ": ms["upper_arm_circ"], "neck_circ": ms["neck_circ"]}
-    for k in ("interpupillary", "head_breadth", "head_depth", "bizygomatic", "menton_sellion", "head_circ"):
-        m[k] = ms[k]
+    for k in ("interpupillary", "head_breadth", "head_depth", "bizygomatic", "menton_sellion", "head_circ") + EXTREMITIES:
+        if k in ms:            # landmark sets saved before hands and feet were measured lack them
+            m[k] = ms[k]
     m["head_length"] = H - m["chin_z"]
     m["heads"] = H / m["head_length"]
     return m

@@ -51,8 +51,8 @@ explicit questions and pairwise comparison.
 side of the body the camera sees; the body's left is +X). Every tile is orthographic at the same
 scale. Orange dashes are the preset's target heights - from the top: chin, shoulder joint, hip
 joint, crotch, knee. Cyan ticks at each tile's left edge are the same landmarks as measured, in
-the same order. `closeups.png`: face front, face left, left hand from its side, left foot from
-front_left.
+the same order. `closeups.png`: face front, face left, left hand from its back, left foot from above and in front
+(hand and foot clipped to themselves, so the thigh and shin cannot hide them).
 
 ## Question bank
 
@@ -110,17 +110,41 @@ Keep the new version only if the locked numbers held **and** the critic prefers 
 
 Used when many designs of one region are rendered on the same body as one grid
 (`views.variant_grid`): one critic call judges all of them, which costs one image and one answer
-instead of one per design. Panels run left to right, top to bottom, numbered from 0; each panel is
-the region from the `front` and `left` (panel 0 is the undesigned base, for reference).
+instead of one per design. Panels run left to right, top to bottom, numbered from 0; panel 0 is the
+undesigned base, for reference. Each panel shows the region from fixed views, in clay:
+
+| region | views in each panel (left to right) |
+|---|---|
+| face | front, left |
+| hands | the left hand from its back; from the front (thumb in profile). Clipped to the hand |
+| feet | the left foot from above and in front; its outer side; the front. Clipped to the foot |
 
 1. **Before looking**, write the questions every panel must answer yes to, for the region. For a face:
    - Does it read as a plausible adult of the brief's sex, not a caricature?
    - Is it free of artefacts - lips crossing or pinched, a nostril collapsed, a dent or ridge, a jaw
      or cheek that bulges unevenly, ears that look stuck on?
    - Is it recognisably a different person from panel 0 (else it adds nothing to a library)?
+
+   For hands: plausible adult hand of the brief's sex and build; fingers separate, tapering, none
+   swollen, webbed past the first knuckle or thinner than the nail; knuckles and nails in place; thumb
+   attached at the palm's side, not the wrist; palm and fingers in proportion (fingers about as long
+   as the palm); visibly different from panel 0 - broader or narrower palm, longer or shorter,
+   thicker or slimmer fingers, wider spread, a heavier or lighter wrist.
+
+   For feet: plausible adult foot; toes in order, separate, the big toe largest; sole flat, heel
+   rounded, an arch or instep line on the outer view; ankle bones readable and the ankle joining the
+   shin without a step or pinch; different from panel 0 - broader or narrower, a higher or flatter
+   instep, a heavier or slimmer ankle.
+
+   Hands and feet vary less than faces: MPFB has few free targets there. Call a design distinct only
+   when the difference is visible without comparing pixel by pixel; say `slight` otherwise.
 2. **Judge every panel** against them, from what is visible, in one line of evidence each.
 3. **Tag every kept panel** with 2-4 plain descriptive tags a person would search by - features,
-   not verdicts: `broad nose`, `strong jaw`, `full lips`, `narrow face`, `hooded eyes`.
+   not verdicts: `broad nose`, `strong jaw`, `full lips`, `narrow face`, `hooded eyes`. For hands and
+   feet, tags on sizes a design measurably moved (palm breadth, finger thickness and spread, wrist,
+   foot breadth, instep height, ankle) are replaced by measured words when the part is stored
+   (`parts.size_tags`): in the first batch critics tagged three of eleven kept feet broad or narrow
+   against their measured breadth. Tag what you see anyway; the other axes (toes, heel, thumb) are yours.
 4. **Return JSON** only:
 
 ```json

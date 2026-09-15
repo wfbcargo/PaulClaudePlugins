@@ -137,8 +137,10 @@ def save_body(human, resolved, fit_rep=None, check_rep=None, name=None, tags=(),
     """Store a fitted body. `resolved` is sheet.resolve()'s result (its z-scores index the body)."""
     s = resolved["sheet"]
     payload = capture(human)
-    params = dict((fit_rep or {}).get("params", {}))
-    params.update((fit_rep or {}).get("face", {}).get("params", {}))
+    fr = fit_rep or {}
+    params = dict((fr.get("extremities") or {}).get("params", {}))
+    params.update(fr.get("params", {}))          # the settle pass ran last: its hand and foot scales hold
+    params.update((fr.get("face") or {}).get("params", {}))
     card = {
         "schema": SCHEMA, "kind": "body", "region": "body", "name": name or s.get("name"), "tags": list(tags),
         "sex": s["sex"], "style": s["style"], "build": s.get("build") if isinstance(s.get("build"), str) else "custom",
@@ -146,9 +148,11 @@ def save_body(human, resolved, fit_rep=None, check_rep=None, name=None, tags=(),
         "features": {k: resolved["z"][k] for k in FEATURES if k in resolved["z"]},
         "payload": payload, "solver_params": params,
         # the solves' final Jacobians: a warm start from this body skips re-measuring every parameter
-        "jacobians": {"body": (fit_rep or {}).get("jacobian"), "face": (fit_rep or {}).get("face", {}).get("jacobian")},
-        "quality": {"fit_rms_tol": (fit_rep or {}).get("rms_tol"), "fit_max_tol": (fit_rep or {}).get("max_tol"),
-                    "face_rms_tol": (fit_rep or {}).get("face", {}).get("rms_tol"),
+        "jacobians": {"body": fr.get("jacobian"), "face": (fr.get("face") or {}).get("jacobian"),
+                      "extremities": (fr.get("extremities") or {}).get("jacobian")},
+        "quality": {"fit_rms_tol": fr.get("rms_tol"), "fit_max_tol": fr.get("max_tol"),
+                    "face_rms_tol": (fr.get("face") or {}).get("rms_tol"),
+                    "extremities_rms_tol": (fr.get("extremities") or {}).get("rms_tol"),
                     "humancheck": (check_rep or {}).get("counts"), "critic": critic},
         "created": datetime.datetime.now().isoformat(timespec="seconds"), "source": "fit",
     }

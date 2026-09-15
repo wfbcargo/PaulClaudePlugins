@@ -105,6 +105,30 @@ FACE_RESIDUALS = [
     ("menton_sellion", "menton_sellion", None),
     ("head_circ", "head_circ", None),
 ]
+# hands and feet: every lever MPFB has that changes a measured size. Finger length trades palm for
+# fingers at a fixed hand length (with hand scale), foot width is the only lever on foot breadth.
+# What is left - finger thickness and spread, foot height - is free for designs (parts.STYLE).
+EXTREMITY_FINE = [
+    ("hand", "hands", "hand-scale", True),
+    ("fingers", "hands", "hand-fingers-length", True),
+    ("wrist", "hands", "measure-wrist-circ", False),
+    ("foot", "feet", "foot-scale", True),
+    ("foot_width", "feet", "foot-scale-horiz", True),
+    ("ankle_girth", "feet", "measure-ankle-circ", False),
+]
+EXTREMITY_RESIDUALS = [
+    ("hand", "hand", None),
+    ("hand_breadth", "hand_breadth", None),
+    ("palm_length", "palm_length", None),
+    ("wrist_circ", "wrist_circ", None),
+    ("foot", "foot", None),
+    ("foot_breadth", "foot_breadth", None),
+    ("ankle_circ", "ankle_circ", None),
+]
+# hand breadth gets 3 mm (0.8 sd): the free finger targets a design uses move it by up to 2-3 mm
+ABS_TOL.update({"hand": 0.003, "hand_breadth": 0.003, "palm_length": 0.003, "wrist_circ": 0.004, "foot": 0.004,
+                "foot_breadth": 0.0025, "ankle_circ": 0.006})
+EXTREMITY_PRIOR = {"hand": 0.2, "fingers": 0.3, "wrist": 0.3, "foot": 0.2, "foot_width": 0.3, "ankle_girth": 0.3}
 FACE_PRIOR = {"head_breadth": 0.5, "head_depth": 0.5, "eye_spacing": 0.5, "cheekbones": 0.5, "face_height": 0.5,
               "forehead": 0.5}
 BUILD_MUSCLE = {"slim": 0.45, "average": 0.5, "athletic": 0.7, "muscular": 0.9, "curvy": 0.5, "soft": 0.3,
@@ -253,9 +277,9 @@ class _State:
         return {n: round(float(v), 3) for n, v in zip(self.names, self.x)}
 
 
-def _measure(human, sex):
+def _measure(human, sex, only=None):
     bpy.context.view_layer.update()
-    return measure.measurements(_body.Body(human), sex, fast=True)
+    return measure.measurements(_body.Body(human), sex, fast=True, only=only)
 
 
 def _residuals(m, target, tol, spec):
@@ -282,7 +306,7 @@ STALL = 0.02         # ... or once an accepted step improves the cost by less th
 
 
 def _solve(human, st, target, spec, tol, sex, iterations=10, damping=0.3, steps=None, verbose=True, label="fit",
-           jacobian=None):
+           jacobian=None, only=None):
     """Levenberg-Marquardt with a finite-difference Jacobian built once and then kept current with
     Broyden rank-one updates from each accepted step - one measurement per step instead of one per
     parameter. A step the updated Jacobian cannot improve rebuilds it once before giving up."""
@@ -291,7 +315,7 @@ def _solve(human, st, target, spec, tol, sex, iterations=10, damping=0.3, steps=
 
     def evaluate():
         evals[0] += 1
-        mm = _measure(human, sex)
+        mm = _measure(human, sex, only)
         return mm, _residuals(mm, target, tol, spec)
 
     steps = np.array(steps if steps is not None else [0.3] * len(st.x))
@@ -387,6 +411,22 @@ def fit_face(human, lm, iterations=8, verbose=True, start=None, jacobian=None):
                   jacobian=jacobian)
 
 
+def fit_extremities(human, lm, iterations=8, verbose=True, start=None, jacobian=None):
+    """L4 hands and feet: hand and foot length, hand breadth, palm length, wrist, foot breadth and
+    ankle girth to ANSUR (plus any design offsets already in `lm`). Skipped for a landmark set that
+    predates these measurements."""
+    target = _landmarks.as_measurements(lm)
+    spec = [r for r in EXTREMITY_RESIDUALS if target.get(r[1]) is not None]
+    if len(spec) < 3:
+        return None
+    st = _State(human, (), EXTREMITY_FINE, EXTREMITY_PRIOR)
+    if start:
+        st.set([start.get(n, v) for n, v in zip(st.names, st.x)])
+    tol = {k: ABS_TOL[k] for k, _, _ in spec}
+    return _solve(human, st, target, spec, tol, lm["sex"], iterations, 0.3, verbose=verbose, label="extremities",
+                  jacobian=jacobian, only="extremities")
+
+
 def rig(human, rig_name=None):
     """MPFB's game_engine rig and weights, renamed to rig-anything's bone names."""
     HumanService, _, _, _ = services()
@@ -424,19 +464,25 @@ def finish(human, rep):
     return rig_ob
 
 
-def fit_all(human, lm, build=None, start=None, jacobians=None, iterations=10, verbose=False, face=True):
-    """Body stage, face stage, then a settle pass: the face moves the chin, and the neck is measured
-    under the chin, so the body is re-measured once and refined briefly if the face disturbed it. A
-    stored body therefore reproduces its residuals when it is applied again."""
+def fit_all(human, lm, build=None, start=None, jacobians=None, iterations=10, verbose=False, face=True,
+            extremities=True):
+    """Body stage, face stage, hands-and-feet stage, then a settle pass: the face moves the chin, and
+    the neck is measured under the chin, so the body is re-measured once and refined briefly if the
+    face disturbed it. A stored body therefore reproduces its residuals when it is applied again."""
     jacobians = jacobians or {}
     rep = fit(human, lm, iterations=iterations, verbose=verbose, build=build, start=start, jacobian=jacobians.get("body"))
+    stages = {}
     if face:
-        rep["face"] = fit_face(human, lm, verbose=verbose, start=start, jacobian=jacobians.get("face"))
+        stages["face"] = fit_face(human, lm, verbose=verbose, start=start, jacobian=jacobians.get("face"))
+    if extremities:
+        ext = fit_extremities(human, lm, verbose=verbose, start=start, jacobian=jacobians.get("extremities"))
+        if ext is not None:
+            stages["extremities"] = ext
+    if stages:
         settle = fit(human, lm, iterations=3, verbose=verbose, build=build, jacobian=rep.get("jacobian"))
-        face_rep = rep["face"]
-        settle["measurements"] += rep["measurements"] + face_rep["measurements"]
-        settle["seconds"] = round(rep["seconds"] + face_rep["seconds"] + settle["seconds"], 1)
-        settle["face"] = face_rep
+        settle["measurements"] += rep["measurements"] + sum(s["measurements"] for s in stages.values())
+        settle["seconds"] = round(rep["seconds"] + sum(s["seconds"] for s in stages.values()) + settle["seconds"], 1)
+        settle.update(stages)
         rep = settle
     return rep
 

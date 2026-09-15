@@ -8,7 +8,8 @@ gesture); columns: front, front_left, left, back. Orthographic, the same scale i
 heights compare across views and across versions. Overlays on the clay and silhouette rows:
   orange dashes - the preset's target heights (chin, shoulder joint, hip joint, crotch, knee)
   cyan ticks    - the same landmarks as measured (left edge of each tile)
-closeups.png - clay: face front, face left, left hand from its side, left foot from front_left.
+closeups.png - clay: face front, face left, left hand from its back, left foot from above and in front
+(hand and foot clipped to themselves).
 
 View names say which side of the body the camera sees: `left` is the body's left, +X.
 Rendered with Workbench in a private scene in the rig's rest pose; the user's scene is untouched.
@@ -48,8 +49,11 @@ def _matcap(name_hint):
     return caps[0] if caps else None
 
 
-def _render_tile(sc, cam, centre, direction, scale, w, h, path):
+def _render_tile(sc, cam, centre, direction, scale, w, h, path, clip=None):
+    """`clip`: render only what lies within this distance of `centre` along the view - a hand in front
+    of the thigh, a foot under the belly."""
     cam.data.ortho_scale = scale
+    cam.data.clip_start, cam.data.clip_end = (10.0 - clip, 10.0 + clip) if clip else (0.1, 40.0)
     cam.data.sensor_fit = "VERTICAL" if h >= w else "HORIZONTAL"
     pos = centre + direction * 10.0
     cam.location = pos
@@ -217,19 +221,16 @@ def contact_sheet(ob, out_dir, preset="realistic", sex=None, include=(), report=
         hs = (top - chin) * 1.5
         close.append(_render_tile(sc, cam, head_c, dirs["front"], hs, cs, cs, os.path.join(out_dir, "tiles", "face_front.png")))
         close.append(_render_tile(sc, cam, head_c, dirs["left"], hs, cs, cs, os.path.join(out_dir, "tiles", "face_left.png")))
-        w, e = b.mark("wrist.L"), b.mark("elbow.L")
-        hand_len = (m or {}).get("hand.L", {}).get("length") or 0.1 * H
-        if w is not None and e is not None:
-            hc = w + (w - e).normalized() * (hand_len / 2)
-            close.append(_render_tile(sc, cam, hc, dirs["left"], max(hand_len * 1.8, 0.12), cs, cs,
-                                      os.path.join(out_dir, "tiles", "hand_left.png")))
-        ank = b.mark("ankle.L")
-        if ank is not None:
-            sel = (b.co[:, 2] < ank.z + 0.02) & (np.abs(b.co[:, 0] - ank.x) < 0.07 * H)
-            fc = Vector(b.co[sel].mean(axis=0)) if sel.any() else ank
-            fl = (m or {}).get("foot") or 0.15 * H
-            close.append(_render_tile(sc, cam, fc, dirs["front_left"], max(fl * 1.6, 0.15), cs, cs,
-                                      os.path.join(out_dir, "tiles", "foot_front_left.png")))
+        # hand from its back and foot from above-front, clipped to themselves (the thigh used to hide
+        # the hand's palm side and the shin the instep)
+        for region, label, fname in (("hands", "back", "hand_back.png"), ("feet", "above", "foot_above.png")):
+            try:
+                fr = next(f for f in region_frames(b, region, m) if f[0] == label)
+            except (ValueError, StopIteration):
+                continue
+            _, c, d, s_, clip = fr
+            close.append(_render_tile(sc, cam, c, d, s_ * 1.2, cs, cs, os.path.join(out_dir, "tiles", fname),
+                                      clip=clip))
         grid = [close[:2], close[2:4]] if len(close) > 2 else [close]
         if len(grid) > 1 and len(grid[1]) < 2:
             grid[1].append(np.zeros_like(close[0]))
@@ -250,26 +251,63 @@ def contact_sheet(ob, out_dir, preset="realistic", sex=None, include=(), report=
     return {"sheets": files, "extra": [o.name for o in extra]}
 
 
-def variant_grid(ob, out_png, variants, apply, region="face", tile=300, views=("front", "left"), per_row=3):
-    """One image of many designs on the same body, for a single critic call. Each design is a panel of
-    `views` of the region in clay; panels run left to right, top to bottom, `per_row` to a row, in the
-    order of `variants`, with a wide gap between panels. `apply(variant)` puts a design on the body."""
+def region_frames(b, region, m=None):
+    """[(label, centre, view direction, ortho scale, clip)] framing one region of a body: the face from
+    the front and left; the left hand from its back and from the front (thumb profile); the left foot
+    from above, its outer side and the front. Hands and feet are clipped to themselves."""
     from . import measure
 
-    b = _body.load(ob)
-    rig = b.rig
-    m = measure.measurements(b, fast=True)
+    m = m or measure.measurements(b, fast=True)
     floor, top = b.floor, b.top
-    fwd = Vector(m["forward"])
-    dirs = _dirs(fwd)
-    chin = floor + (m.get("chin_z") or 0.87 * (top - floor))
+    dirs = _dirs(Vector(m["forward"]))
     if region == "face":
+        chin = floor + (m.get("chin_z") or 0.87 * (top - floor))
         centre = Vector((0.0, 0.0, (chin + top) / 2 - 0.01))
         ys = b.co[b.co[:, 2] > chin][:, 1]
         centre.y = float((ys.min() + ys.max()) / 2) if len(ys) else 0.0
         scale = (top - chin) * 1.35
-    else:
-        raise ValueError("variant_grid frames the face; other regions are not framed yet")
+        return [(v, centre, dirs[v], scale, None) for v in ("front", "left")]
+    if region == "hands":
+        fr = measure.hand_frame(b, "L")
+        if fr is None:
+            raise ValueError("no left hand to frame (no wrist and elbow landmarks)")
+        w, a, across, back, length = fr
+        centre = w + a * (0.55 * length)
+        side = (dirs["front"] - a * dirs["front"].dot(a)).normalized()
+        return [("back", centre, back, 1.4 * length, 0.6 * length),
+                ("front", centre, side, 1.4 * length, 0.6 * length)]
+    if region == "feet":
+        ank = b.mark("ankle.L")
+        if ank is None:
+            raise ValueError("no left ankle to frame")
+        H = top - floor
+        sel = (b.co[:, 2] < ank.z) & (np.abs(b.co[:, 0] - ank.x) < 0.07 * H)
+        pts = b.co[sel]
+        az = ank.z - floor
+        centre = Vector(((pts[:, 0].min() + pts[:, 0].max()) / 2, (pts[:, 1].min() + pts[:, 1].max()) / 2,
+                         floor + 0.4 * az))
+        length = float(max(np.ptp(pts[:, 1]), np.ptp(pts[:, 0])))
+        # from above and in front (straight down, the shin hides the foot, and clipping the shin away
+        # leaves a cut face over the instep); from the front, framed tighter and lower, since a foot is a
+        # third as wide as it is long. The clips keep the other leg and the belly out.
+        low = centre.copy()
+        low.z = floor + 0.8 * az
+        above = (dirs["front"] * 0.6 + Vector((0.0, 0.0, 1.0))).normalized()
+        return [("above", centre, above, 1.1 * length, 0.2),
+                ("outer", low, dirs["left"], 1.1 * length, 0.12),
+                ("front", low, dirs["front"], 0.6 * length, 0.2)]
+    raise ValueError(f"variant_grid frames face, hands and feet, not {region!r}")
+
+
+def variant_grid(ob, out_png, variants, apply, region="face", tile=300, views=None, per_row=3):
+    """One image of many designs on the same body, for a single critic call. Each design is a panel of
+    views of the region in clay (see `region_frames`; `views` picks some by label); panels run left to
+    right, top to bottom, `per_row` to a row, in the order of `variants`, with a wide gap between
+    panels. `apply(variant)` puts a design on the body. The frame is fixed from the body as it is when
+    called, so designs compare at one scale."""
+    b = _body.load(ob)
+    rig = b.rig
+    frames = [f for f in region_frames(b, region) if views is None or f[0] in views]
     extra = [o for o in bpy.data.objects if o.type == "MESH" and o is not b.ob and rig is not None
              and _body.rig_of(o) is rig and any(k in o.name.lower() for k in AUTO_INCLUDE)]
     sc = bpy.data.scenes.new("HumanformVariants")
@@ -303,8 +341,9 @@ def variant_grid(ob, out_png, variants, apply, region="face", tile=300, views=("
         for i, variant in enumerate(variants):
             apply(variant)
             bpy.context.view_layer.update()
-            rows.append(_stitch([[_render_tile(sc, cam, centre, dirs[v], scale, tile, tile,
-                                               os.path.join(tmp, f"{i:02d}_{v}.png")) for v in views]], gap=2))
+            rows.append(_stitch([[_render_tile(sc, cam, centre, d, scale, tile, tile,
+                                               os.path.join(tmp, f"{i:02d}_{label}.png"), clip=clip)
+                                  for label, centre, d, scale, clip in frames]], gap=2))
         blank = np.zeros_like(rows[0])
         blank[:] = (0.12, 0.12, 0.13, 1.0)
         grid = [rows[i:i + per_row] for i in range(0, len(rows), per_row)]

@@ -22,16 +22,16 @@ import time
 import bpy
 import numpy as np
 
-from . import landmarks, library, measure, scaffold, sheet, views
+from . import landmarks, library, measure, parts, scaffold, sheet, views
 
 REUSE = 0.35
 WARM = 1.6
 
 
 def make(s, out_dir=None, store=False, use_library=True, contact_sheet=False, tags=(), verbose=False, eyes=True,
-         face_part=None):
-    """`face_part`: a library face part (card or id) applied before the face is fitted, so its look is kept
-    and its measurements are re-solved for this body."""
+         face_part=None, hand_part=None, foot_part=None):
+    """`face_part`, `hand_part`, `foot_part`: library parts (card or id) applied before the fit, so their
+    look is kept and the measurements - moved by a hand or foot part's offsets - are solved for this body."""
     t = {}
     t0 = time.time()
     r = sheet.resolve(s)
@@ -70,12 +70,20 @@ def make(s, out_dir=None, store=False, use_library=True, contact_sheet=False, ta
                 path = "reuse"
                 rep = {"params": start, "rms_tol": round(float(np.sqrt(np.mean(res ** 2))), 3), "measurements": 1,
                        "seconds": 0.0, "history": [], "residuals": []}
+                if not jac.get("extremities"):
+                    # stored before hands and feet were fitted: fit just those (under a second)
+                    ext = scaffold.fit_extremities(human, lm, verbose=verbose, start=start)
+                    if ext is not None:
+                        rep["extremities"] = ext
     t["create"] = time.time() - t1
 
-    if face_part is not None:
-        part = library.load(face_part if isinstance(face_part, str) else face_part["id"])
+    for chosen in (face_part, hand_part, foot_part):
+        if chosen is None:
+            continue
+        part = library.load(chosen if isinstance(chosen, str) else chosen["id"])
         library.apply(human, part)
-        rep = None                          # a new face means the stored fit no longer holds
+        lm = parts.offset_landmarks(lm, part, s["sex"])     # a hand or foot design's size offsets
+        rep = None                          # a new part means the stored fit no longer holds
     t2 = time.time()
     if rep is None:
         rep = scaffold.fit_all(human, lm, build=build, start=start, jacobians=jac, verbose=verbose)

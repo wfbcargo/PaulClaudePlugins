@@ -18,7 +18,8 @@ been **measured**. The research behind this plugin, and the full plan, are in
 | L1 | proportions and landmarks from ANSUR II, `realistic` / `stylized`; a rig on them | **built** (0.2.0) - `landmarks`, `skeleton` |
 | L2 | MPFB2 base driven to the landmarks, rig renamed | **built** (0.3.0) - `scaffold` |
 | L4 | face stage (ANSUR head measures), face design parts, eyes; library and pipeline | **built** (0.4.0) - `scaffold.fit_face`, `parts`, `eyes`, `library`, `pipeline` - see the `humanlib` skill |
-| L3-L4 | muscle definition and stylized exaggeration (SDF forms); hands and feet designs; hair | next |
+| L4 | hands-and-feet stage (ANSUR hand and foot sizes), hand and foot design parts | **built** (0.5.0) - `scaffold.fit_extremities`, `parts.design` / `screen` - see `humanlib` |
+| L3-L4 | muscle definition and stylized exaggeration (SDF forms); hair | next |
 | L5-L6 | reproject onto base topology, micro-detail, bake, skin | Phase 5 |
 | L7 | rig from landmarks, flesh regions, export | Phase 6 |
 

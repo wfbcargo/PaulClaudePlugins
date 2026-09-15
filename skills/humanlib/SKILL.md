@@ -1,6 +1,6 @@
 ---
 name: humanlib
-description: Reuse and compose adult human bodies and body parts for Blender and Godot 4.7 instead of building every character from scratch - a library of fitted MPFB2 bodies and judged parts (faces now; hands, feet and more later) indexed by ANSUR II measurements and descriptive tags, a one-call pipeline that reuses a stored body in under a second, warm-starts a similar one in a few seconds or fits a new one, parts that transfer between bodies on MPFB's shared mesh without stitching, batch design of part variants judged by one critic call, and verdict statistics that steer future designs away from what critics reject. Use when making several characters, crowds, NPCs or variations; when asked to reuse, save, store, catalogue, index, search or combine characters, bodies, faces or parts; to give a body a different face; to generate face variants; to make character creation faster; or to add eyes to an MPFB body.
+description: Reuse and compose adult human bodies and body parts for Blender and Godot 4.7 instead of building every character from scratch - a library of fitted MPFB2 bodies and judged parts (faces, hands and feet) indexed by ANSUR II measurements and descriptive tags, a one-call pipeline that reuses a stored body in under a second, warm-starts a similar one in a few seconds or fits a new one, parts that transfer between bodies on MPFB's shared mesh without stitching, batch design of part variants judged by one critic call, and verdict statistics that steer future designs away from what critics reject. Use when making several characters, crowds, NPCs or variations; when asked to reuse, save, store, catalogue, index, search or combine characters, bodies, faces, hands, feet or parts; to give a body a different face, hands or feet; to generate face, hand or foot variants; to make character creation faster; or to add eyes to an MPFB body.
 ---
 
 # humanlib
@@ -16,7 +16,8 @@ Bootstrap as in `humancheck` (reload `humanform`), then `from humanform import p
 ```python
 res = pipeline.make(sheet.new(name="Ines", sex="female", age=31, stature=1.70, build="athletic"),
                     out_dir=r"C:/proj/people/ines", store=False, contact_sheet=True,
-                    face_part="face-female-11-6-df37e12a")     # optional stored face
+                    face_part="face-female-11-6-df37e12a",     # optional stored parts
+                    hand_part="hands-female-hands-21-2-b35cf548", foot_part=None)
 res["path"], res["nearest"], res["timing"], res["check"]
 ```
 
@@ -27,7 +28,13 @@ res["path"], res["nearest"], res["timing"], res["check"]
 | `fresh` | otherwise | 3.5-7.5 s |
 
 `store=True` saves the result as a body card when humancheck has no fails. Eyes are added
-(`eyes=False` to skip). A `face_part` forces a fit so its measurements are re-solved for this body.
+(`eyes=False` to skip). A part forces a fit so its measurements are re-solved for this body; a hand
+or foot part's size offsets move the targets first.
+
+Every fit has three stages and a settle pass: body, face (ANSUR head measures), hands and feet
+(`scaffold.fit_extremities`: hand length and breadth, palm length, wrist girth, foot length and
+breadth, ankle girth; 0.4-0.9 s, 8-9 measurements, within 0.7 tolerances on the reference briefs).
+A body stored before 0.5.0 gets the hands-and-feet stage on reuse.
 
 ## The library
 
@@ -72,6 +79,41 @@ A design uses only **style** targets (nose, lips, jaw, chin, cheeks, brows, eyel
 never the ones the face fit uses to hold ANSUR's head measurements, so a stored face goes onto any
 body and `scaffold.fit_face` restores that body's measurements with the look intact.
 
+## Hands and feet
+
+MPFB's hands and feet have few free targets - the fit needs hand scale, finger length, wrist girth,
+foot scale, foot width and ankle girth to hold ANSUR's sizes - so a hand or foot design is two things:
+
+- **free targets** the fit leaves alone: finger thickness and spread; foot depth (after the refit, a
+  higher, thicker or a lower, flatter foot);
+- **size offsets** in ANSUR standard deviations for the sex: `palm` (+ broad palm with short
+  fingers, - narrow palm with long fingers: MPFB moves palm length and breadth together, so asking
+  for them separately gave hands 2-3.4 tolerances out), `wrist`, `foot_breadth`, `ankle`.
+
+```python
+base = res["fit"]["extremities"]          # the base body's hands-and-feet fit: params + Jacobian
+lm = landmarks.from_measurements(sheet.resolve(s)["values"], s["sex"], s["style"])
+drawn = [{"name": "base", "region": "hands", "targets": {}}] + parts.variants("hands", n=16, seed=21, strength=1.3)
+vs, lost = parts.screen(human, lm, drawn, base, n=9)     # refit each (~0.3 s); drop what the mesh cannot make
+png = views.variant_grid(human.name, out_png, vs, region="hands", apply=lambda v: parts.show(human, v))
+```
+
+`screen` refits each design to its offset sizes from the base fit's Jacobian and drops designs whose
+refit misses by more than 1.5 tolerances (1 in 37 in the first batch) - the critic never judges a
+hand the mesh did not actually make. `show` puts a screened design's resulting shape back without
+refitting, so the grid renders in 1-2 s. Frames (`views.region_frames`): a hand from its back and
+from the front, a foot from above-front, its outer side and the front, each clipped to the hand or
+foot so the thigh, shin and belly cannot hide it.
+
+Judge with the checklist's hand and foot questions, then store and record as for faces. `store`
+tags hands and feet with **measured words** (`parts.size_tags`: `broad palm`, `slender fingers`,
+`narrow foot`, `heavy ankle`, ...) and keeps the critic's tags only on other axes (toes, thumb,
+heel): critics tagged three of eleven kept feet broad or narrow against their measured breadth.
+Hand and foot differences are subtle - critics called about half the kept designs `slight`.
+
+Seeded in the user's library: 13 hand and 11 foot parts from Mara (female) and Kade (male).
+`scripts/seed_parts.py` re-stores them from `data/seed/*_hands_*` and `*_feet_*`.
+
 ## Eyes
 
 `eyes.add(human, iris=(r, g, b))` builds `<name>_eyes` - two spheres with sclera, iris and pupil -
@@ -101,7 +143,9 @@ half their amplitude, so one unlucky batch cannot erase a feature.
 
 - Parts are MPFB target sets. A sculpted part (a displacement delta masked to a region) is the next
   payload type; nothing converts a non-MPFB mesh onto the shared topology yet.
-- Regions for parts: face now; hands and feet have measurements but no style designs yet.
+- Regions for parts: face, hands, feet. Hand and foot designs are limited to MPFB's targets: no
+  knuckle, nail, toe-length or arch-shape designs until delta (sculpted) payloads exist. Hand and foot
+  parts are symmetric; there are no left- or right-only parts.
 - Hair, eyebrows and eyelashes are not parts yet; eyes have flat Principled colours (lookdev later).
 - Head count is judged against a fixed 7.7 heads; short people legitimately read fewer (a 1.55 m
   woman with ANSUR head measurements is 7.3).

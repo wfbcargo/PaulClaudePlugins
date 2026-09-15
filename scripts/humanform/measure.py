@@ -130,6 +130,113 @@ def _foot(b, side, fwd):
     return float(f.max() - f.min())
 
 
+def _hands_feet(b, m, fwd, count_fingers):
+    for s in ("L", "R"):
+        hd = _hand(b, s, fwd, count_fingers=count_fingers)
+        if hd:
+            m[f"hand.{s}"] = hd
+        ft = _foot(b, s, fwd)
+        if ft:
+            m[f"foot.{s}"] = ft
+    hands = [m[k]["length"] for k in ("hand.L", "hand.R") if k in m]
+    m["hand"] = sum(hands) / len(hands) if hands else None
+    feet = [m[k] for k in ("foot.L", "foot.R") if k in m]
+    m["foot"] = sum(feet) / len(feet) if feet else None
+
+
+def hand_frame(b, side="L"):
+    """(wrist, axis, across, back, length): the hand's long axis from the elbow, the palm's breadth
+    direction (principal axis of the palm section), and the back of the hand's normal. None if no hand."""
+    w, e = b.mark(f"wrist.{side}"), b.mark(f"elbow.{side}")
+    if w is None or e is None:
+        return None
+    hd = _hand(b, side, None, count_fingers=False)
+    if not hd or not hd["length"]:
+        return None
+    a = (w - e).normalized()
+    length = hd["length"]
+    p = w + a * (0.3 * length)
+    loops = [lp for lp in slicing.cut(b, p, a, hull=False) if (lp.centre - p).length < 0.5 * length]
+    if not loops:
+        return None
+    pts = max(loops, key=lambda lp: len(lp.points)).points
+    q = pts - pts.mean(axis=0)
+    q -= np.outer(q @ np.array(a), np.array(a))
+    across = Vector(np.linalg.svd(q, full_matrices=False)[2][0])
+    back = a.cross(across).normalized()
+    # the back of the hand faces away from the body: outward in X on a hanging arm
+    sgn = 1.0 if side == "L" else -1.0
+    if back.x * sgn < 0:
+        back = -back
+    return w, a, across, back, length
+
+
+def _extremities(b, m, fwd):
+    """ANSUR II's hand and foot breadths and wrist and ankle circumferences, left side.
+    Hand breadth: across the knuckles (metacarpale II to V) - the widest palm section below where
+    the fingers split, thumb excluded. Wrist: the narrowest section at the wrist crease. Foot breadth:
+    the widest extent across the foot's own long axis. Ankle: the narrowest girth above the malleoli."""
+    fr = hand_frame(b, "L")
+    if fr is not None:
+        w, a, across, back, length = fr
+
+        def hand_loops(frac):
+            p = w + a * (frac * length)
+            return [lp for lp in slicing.cut(b, p, a, hull=False) if (lp.centre - p).length < 0.5 * length]
+
+        # palm length: wrist to where the fingers split (three or more sections), bisected to 0.1% of
+        # the hand - ANSUR measures to the base of the middle finger, which is where the webs meet
+        lo, hi = 0.40, None
+        for frac in np.arange(0.40, 0.80, 0.04):
+            if len(hand_loops(frac)) >= 3:
+                hi = frac
+                break
+            lo = frac
+        if hi is not None:
+            for _ in range(5):
+                mid = (lo + hi) / 2
+                if len(hand_loops(mid)) >= 3:
+                    hi = mid
+                else:
+                    lo = mid
+            split = (lo + hi) / 2
+            m["palm_length"] = split * length
+            # breadth across the knuckles: the palm's widest section in the fifth of the hand below the
+            # split, ignoring sections the thumb has joined (a thumb merged at the base reads ~1.5x wide)
+            widths = []
+            for frac in np.linspace(split - 0.22, split - 0.02, 9):
+                loops = hand_loops(frac)
+                if loops:
+                    ext = max(loops, key=lambda lp: len(lp.points)).points @ np.array(across)
+                    widths.append(float(ext.max() - ext.min()))
+            if widths:
+                ref = float(np.median(widths))
+                m["hand_breadth"] = max(x for x in widths if x <= 1.2 * ref)
+        girths = []
+        for frac in np.linspace(-0.12, 0.04, 5):
+            p = w + a * (frac * length)
+            loops = [lp for lp in slicing.cut(b, p, a) if (lp.centre - p).length < 0.06]
+            if loops:
+                girths.append(min(loops, key=lambda lp: (lp.centre - p).length).perimeter)
+        if girths:
+            m["wrist_circ"] = min(girths)
+    ank = b.mark("ankle.L")
+    if ank is not None:
+        H = b.top - b.floor
+        low = b.co[(b.co[:, 2] < b.floor + 0.6 * (ank.z - b.floor)) & (np.abs(b.co[:, 0] - ank.x) < 0.07 * H)]
+        if len(low) > 10:
+            xy = low[:, :2] - low[:, :2].mean(axis=0)
+            axes = np.linalg.svd(xy, full_matrices=False)[2]
+            m["foot_breadth"] = float(np.ptp(xy @ axes[1]))
+        girths = []
+        for zz in np.linspace(ank.z + 0.02 * H, ank.z + 0.08 * H, 7):
+            ls = [lp for lp in slicing.horizontal(b, zz) if 0.0 < lp.centre.x < 0.2 * H and lp.perimeter < 0.5]
+            if ls:
+                girths.append(min(ls, key=lambda lp: abs(lp.centre.x - ank.x)).perimeter)
+        if girths:
+            m["ankle_circ"] = min(girths)
+
+
 def _ratio(var, sex, default):
     """ANSUR II mean height ratio for a sex, or a default when the sex is not given."""
     if sex not in ("female", "male"):
@@ -186,9 +293,10 @@ def _head(b, m, fwd, floor, zs, f, nose, chin):
             m["bizygomatic"] = biz
 
 
-def measurements(ob, sex=None, fast=False):
+def measurements(ob, sex=None, fast=False, only=None):
     """Raw numbers. `fast` skips what a proportion solver does not need - finger counts, joint
-    centring, mesh health and symmetry - for about a third of the time."""
+    centring, mesh health and symmetry, hand and foot breadths and girths - for about a third of the
+    time. `only="extremities"` measures just the hands and feet, for their own fit stage."""
     b = ob if isinstance(ob, _body.Body) else _body.load(ob)
     m = {"object": b.ob.name, "rig": b.rig.name if b.rig else None,
          "landmark_source": b.landmark_source, "landmarks": {k: [round(c, 4) for c in v] for k, v in b.landmarks.items()}}
@@ -210,6 +318,11 @@ def measurements(ob, sex=None, fast=False):
     m["forward"] = list(fwd)
     left = b.mark("shoulder.L")
     m["left_is_plus_x"] = None if left is None else bool(left.x > 0)
+
+    if only == "extremities":
+        _hands_feet(b, m, fwd, count_fingers=False)
+        _extremities(b, m, fwd)
+        return m
 
     for name in ("shoulder", "elbow", "wrist", "hip", "knee", "ankle"):
         mid, pair = _avg(b, name)
@@ -272,18 +385,9 @@ def measurements(ob, sex=None, fast=False):
         m["head_length"] = top - chin
         m["heads"] = H / m["head_length"] if m["head_length"] > 0 else None
 
-    # hands and feet
-    for s in ("L", "R"):
-        hd = _hand(b, s, fwd, count_fingers=not fast)
-        if hd:
-            m[f"hand.{s}"] = hd
-        ft = _foot(b, s, fwd)
-        if ft:
-            m[f"foot.{s}"] = ft
-    hands = [m[k]["length"] for k in ("hand.L", "hand.R") if k in m]
-    m["hand"] = sum(hands) / len(hands) if hands else None
-    feet = [m[k] for k in ("foot.L", "foot.R") if k in m]
-    m["foot"] = sum(feet) / len(feet) if feet else None
+    _hands_feet(b, m, fwd, count_fingers=not fast)
+    if not fast:
+        _extremities(b, m, fwd)
 
     # widths and circumferences
     if m.get("shoulder_z"):
