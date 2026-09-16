@@ -9,7 +9,7 @@ Thumbs.db
 .work-log/
 .review/
 
-# Python bytecode from Blender importing the rig-anything scripts
+# Python bytecode
 __pycache__/
 *.pyc
 

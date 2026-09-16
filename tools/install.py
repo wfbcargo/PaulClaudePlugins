@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Install plugins from this repo into ~/.claude/skills, the copy Claude Code actually loads.
 
-    python tools/install.py wardrobe rig-anything
+    python tools/install.py claude-architect claude-boundaries
     python tools/install.py --all              # every repo plugin already installed there
     python tools/install.py --all --dry-run    # show what would change, write nothing
 
