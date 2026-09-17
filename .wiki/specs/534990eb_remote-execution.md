@@ -9,7 +9,18 @@ allowing non-leaf roles later is a config change, not a rewrite.
 
 ## Acceptance criteria
 
-1. `REMOTE_EXECUTION=off` reproduces today's behaviour byte-for-byte.
+1. `REMOTE_EXECUTION=off` changes no branch, worktree, script or dispatch
+   behaviour — every remote mechanism stays dormant and local runs take exactly
+   the paths they took before.
+
+   **The wiki-writer policy (S3) is the deliberate exception and is NOT gated by
+   this knob.** It changes how local leaves behave too, because its reason is
+   concurrency rather than location: parallel leaves cannot see each other's
+   in-flight `decisions/<NNNN>` and `R-NNN` allocations whether they run on this
+   machine or on a VM. Gating it on `REMOTE_EXECUTION` would leave the race in
+   place for exactly the configuration most people run. Recorded here because an
+   earlier wording of this criterion said "byte-for-byte", which S3 contradicts;
+   the spec-adherence audit caught it and S3 is what was built.
 2. A remote leaf's code, work-log, and wiki proposals all reach the parent
    branch without the leaf ever writing to the orchestrator's filesystem.
 3. No two concurrent leaves can collide on `.wiki/` numbering.
