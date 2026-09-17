@@ -37,6 +37,7 @@ trigger is the resident part; the steps are not.
 | `docs/procedures/headless.md` | `CLAUDE_HEADLESS=1` |
 | `docs/model-routing.md` | Remapping model tiers, or after a classifier refusal |
 | `docs/procedures/containers.md` | The project has `.wiki/containers.yaml` and you are decomposing, assigning scope, or placing new code |
+| `docs/procedures/remote-execution.md` | Dispatching an `implementation` leaf and `REMOTE_EXECUTION` is not `off`, or a dispatched remote leaf has returned |
 
 Mechanical git recipes are `scripts/`, not prose — invoke them rather than
 reconstructing the commands:
@@ -44,9 +45,12 @@ reconstructing the commands:
 | Script | Does |
 |--------|------|
 | `scripts/new-worktree.sh <tier> <slug> [parent]` | Dirty-check, id, branch, worktree, `[target:]` commit, work-log dirs, dependency setup. Prints `branch=` / `worktree=` / `unit_id=` / `target=`. |
-| `scripts/squash-up.sh <branch> <msg> [--keep-worktree]` | Squash into the derived parent, commit, remove worktree, delete branch. Exits 2 on conflict having committed nothing. |
+| `scripts/squash-up.sh <branch> <msg> [--from-origin] [--keep-worktree]` | Squash into the derived parent, commit, remove worktree, delete branch. `--from-origin` for a branch that lives on a remote leaf's push rather than a local worktree. Exits 2 on conflict having committed nothing. |
 | `scripts/containers.mjs <cmd>` | Container map: `validate` / `check [--changed]` / `where <path>` / `scope <id>` / `emit`. No-ops loudly when the project has no `.wiki/containers.yaml`. |
 | `scripts/worktree-setup.sh <main> <worktree>` | Called automatically by `new-worktree.sh`. Links dependency trees, copies env files. Override per project with `.claude/worktree-setup.sh`. |
+| `scripts/remote-preflight.sh` | Checks remote eligibility in one call. Prints `remote_available=` / `reason=` / `origin=` / `default_branch=` / `base_pushed=` / `plugin_declared=` / `setup_script=`. |
+| `scripts/remote-dispatch.sh <tier> <slug> <parent>` | Pushes the base, dispatches with `isolation: remote`. Prints `base=` / `branch=` / `unit_id=` / `export_log=`. |
+| `scripts/remote-collect.sh <branch>` | Fetches a remote leaf's pushed branch and receipt. Prints `fetched=` / `export_log=` / `commits=` / `status=`. |
 
 ---
 
@@ -60,6 +64,9 @@ reconstructing the commands:
 | `MAX_CONTEXT_REQUEST_DEPTH` | 4 | Hops a `paused_for_context` request may propagate up before escalating |
 | `MAX_ORCHESTRATOR_DEPTH` | 4 | Nested orchestrator levels before forcing flatten/escalate (guard-band under the runtime nested-subagent cap of 5) |
 | `MAX_CONTINUATIONS` | 3 | Times one unit may be resumed from a continue file before the decomposition is declared wrong |
+| `REMOTE_EXECUTION` | `off` | `off` / `leaf` / `subtree`. `subtree` is v2 and rejected in v1 — see `docs/procedures/remote-execution.md`. |
+| `MAX_CONCURRENT_REMOTE_AGENTS` | 6 | Cloud sessions alive at once. Separate budget from `MAX_CONCURRENT_AGENTS` — see below. |
+| `REMOTE_LEAF_TIMEOUT_MIN` | 45 | Minutes before an uncollected remote leaf is declared lost and re-dispatched. |
 
 Override per-project in `.claude/settings.json`.
 
@@ -71,6 +78,13 @@ one a human should look at rather than a third robot. `MAX_CONCURRENT_AGENTS` is
 each run tests in their own worktree, and 20 of those will thrash a machine long
 before the orchestrator notices. Raise them if your runs are genuinely
 converging and your I/O has headroom.
+
+`MAX_CONCURRENT_REMOTE_AGENTS` is a separate knob, not a shared pool with
+`MAX_CONCURRENT_AGENTS`, because the two are bound by different resources. A
+local leaf's ceiling is disk: worktrees on this machine. A remote leaf costs
+this account's rate limit and no local disk at all, so the local ceiling says
+nothing about how many cloud sessions the account can sustain concurrently, and
+raising one must never silently raise the other.
 
 ---
 
@@ -246,14 +260,27 @@ their list.
 
 ### When agents write to the wiki
 
-A wiki update is appropriate when a finding is **durable** (still true in a
-month), **non-obvious from the code**, and **project-scoped**. An architectural
+**What qualifies** (who writes it is the next paragraph, and it is not you unless
+you are the orchestrator). A wiki entry is warranted when a finding is
+**durable** (still true in a month), **non-obvious from the code**, and
+**project-scoped**. An architectural
 decision → a `decisions/<NNNN>-<slug>.md` entry. A new rule → append to
 `rules.md`. A "we tried X, it failed because Y" → `gotchas.md`. A clarified
-convention → `conventions.md`. A new domain term → `glossary.md`. Wiki edits
-happen in the same worktree as the work that produced them and ride the
-squash-merge. Default is **omit**: if you can't say why a future agent will need a
-note, don't add it.
+convention → `conventions.md`. A new domain term → `glossary.md`. Default is
+**omit**: if you can't say why a future agent will need a note, don't add it.
+
+**The orchestrator is the sole writer of `.wiki/` — leaves propose, they never
+write it.** A leaf with durable knowledge appends a `## Wiki proposals` section
+to its work-log/export-log entry instead of editing `.wiki/` itself, and sets
+`needs-parent-read: yes`. The orchestrator applies accepted proposals on the
+parent branch during integration and is the only place `decisions/<NNNN>` and
+`R-NNN` numbers get allocated. A rejected proposal is one line in the
+orchestrator's own agent file: `rejected wiki proposal from <child-id>:
+<reason>`. This applies to **local leaves too, not just remote ones** — the
+reason is concurrency, not location: two leaves writing in parallel cannot see
+each other's in-flight `decisions/<NNNN>` or `R-NNN` allocations, so two
+leaves can pick the same number. A single writer removes the race instead of
+detecting it after the fact.
 
 ---
 
@@ -340,11 +367,13 @@ made.
    parallel `Phase 1.1, 1.2`).
 4. **Assign an owner role to every sub-unit: `orchestrator` or `leaf`**, per the
    defaults in *Delegate or execute* above — where `leaf` is the default and a
-   child orchestrator must meet both of its two conditions. Write the assignment
-   down, one line per sub-unit in the work-log, e.g. `spec 7e0e8fb3 api-surface:
-   leaf ×2`. This step is not optional and not implicit: a sub-unit with no
-   recorded role is a delegation decision that was defaulted past rather than
-   made.
+   child orchestrator must meet both of its two conditions. For a `leaf`, record
+   its execution site on the same line: `@local` (the default) or `@remote`, the
+   latter only when `docs/procedures/remote-execution.md` → *Eligibility* holds.
+   Write the assignment down, one line per sub-unit in the work-log, e.g. `spec
+   7e0e8fb3 api-surface: leaf ×2 @local`. This step is not optional and not
+   implicit: a sub-unit with no recorded role is a delegation decision that was
+   defaulted past rather than made.
 5. Emit the artifact — create the branch, write `.wiki/specs/<id>.md` before
    spawning implementation work.
 
@@ -383,6 +412,7 @@ runs concurrently, it buys nothing.
 | Impl phase running **sequentially** | **No** — commit into the parent's worktree, one commit per phase. |
 | `fix` agent in the review loop | **No** — see *Code review pipeline*. |
 | `merge` agent (post-PR conflicts) | **Yes** — `--additional/merge-target-aN`. |
+| Impl phase dispatched with `isolation: remote` | **No local worktree** — the VM is the isolation. See `docs/procedures/remote-execution.md`. |
 
 So `new-worktree.sh` is called for top-level units, for parallel impl siblings,
 and for merge agents. A sequential phase just commits. This is the difference
@@ -625,6 +655,13 @@ one earned. It is ephemeral: sub-agent work-logs die when their worktree is
 removed; the top-level work-log is `rm -rf`'d before the PR push. Durable
 knowledge goes to `.wiki/`, not here.
 
+A remote leaf has no worktree to write into, so it writes the same content to a
+**committed** `.work-log-export/<agent-id>.md` on its own branch instead of
+`.work-log/agents/<agent-id>.md`. `squash-up.sh --from-origin` deletes
+`.work-log-export/` as part of the squash commit, so it never reaches a PR —
+same lifecycle as a local agent file, just carried by the branch instead of the
+filesystem since there is no shared disk between the VM and the orchestrator.
+
 ```
 .work-log/
 ├── QUEUE.md          # Top-level only. Sole writer: top-level orchestrator.
@@ -647,8 +684,9 @@ probably a note that shouldn't be written.
 
 | Type | Writer | Reader | Dies |
 |------|--------|--------|------|
-| `.wiki/**` | any agent | every future agent, and humans | never (committed) |
-| `.work-log/agents/<id>.md` | one child | its parent, at integration | with the worktree |
+| `.wiki/**` | orchestrator only (leaves propose, see *When agents write to the wiki*) | every future agent, and humans | never (committed) |
+| `.work-log/agents/<id>.md` | one local child | its parent, at integration | with the worktree |
+| `.work-log-export/<id>.md` | one remote child | its parent, at integration | deleted by `squash-up.sh --from-origin` |
 | `.work-log/continue/<unit>.md` | the agent owning a unit | that unit's **successor agent** | when the unit completes |
 
 Continue files are the odd one: addressed sideways in time rather than upward,
@@ -691,10 +729,15 @@ Hard cap ~15 lines, no code blocks, no diffs, no restatement of the work:
 ```
 status: completed
 work-log: .work-log/agents/<your-id>.md
+branch: <the branch you pushed>          # remote leaves only
 files: <paths touched, one line>
 needs-parent-read: no        # yes ONLY if the line below is non-empty
 surprises: <blank, or ONE line: what happened that the diff does not show>
 ```
+
+A remote leaf's `work-log:` line points at its `.work-log-export/<your-id>.md`
+instead, and its `branch:` line is what `remote-collect.sh` fetches by — see
+`docs/procedures/remote-execution.md`.
 
 The savings exist **only because the parent can then decline to open the file.**
 `status: completed` + `needs-parent-read: no` means the parent integrates and
@@ -786,6 +829,12 @@ request upward (incrementing hops). At `MAX_CONTEXT_REQUEST_DEPTH` it becomes a
 normal escalation — a chain that deep means context was mishandled at spawn time.
 Use this only for *missing context*; spec ambiguity or a human decision is a
 normal `escalated`, not a context request.
+
+`paused_for_context` is **unavailable to a remote leaf** — a cloud session
+cannot message its parent, so a remote leaf missing context writes `status:
+failed` with a `## Context I need` section and exits instead of pausing. See
+`docs/procedures/remote-execution.md` for the re-dispatch that replaces the
+resume.
 
 ---
 

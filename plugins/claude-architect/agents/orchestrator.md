@@ -175,6 +175,33 @@ worktree is usable — but the create/setup/remove cycle is still the largest
 wall-clock cost you control. Every worktree you skip is time the user does not
 spend waiting.
 
+## Remote dispatch (only when `REMOTE_EXECUTION` != `off`)
+An `implementation` leaf may run on an Anthropic-managed cloud VM
+(`isolation: remote`, agent definition `remote-implementation.md`) instead of a
+local worktree. Eligibility, the branch/push contract, and the script surface
+are fixed by `docs/procedures/remote-execution.md` — read it before your first
+remote dispatch of a run. Only
+`implementation` is eligible in v1; `fix`, `review`, `merge`, and the audit
+roles stay local.
+
+- Before dispatching: `git push -u origin <base>`. A remote leaf's base is your
+  current branch only if it is already on origin — there is no per-agent base
+  parameter, so an unpushed base leaves the leaf building on the wrong tree.
+- Budget concurrent remote dispatches against `MAX_CONCURRENT_REMOTE_AGENTS`, a
+  budget separate from `MAX_CONCURRENT_AGENTS`. That knob is disk-bound (local
+  worktrees thrashing one machine); a remote leaf runs on its own VM and does
+  not draw on it.
+- Collect with `remote-collect.sh <branch>`, then integrate through
+  `squash-up.sh <branch> <msg> --from-origin` rather than the local worktree path.
+- A remote leaf that returns `status: failed` with a `## Context I need`
+  section cannot be resumed in place — it has no channel to wait on you.
+  Re-dispatch a fresh leaf with the answer folded into its spawn prompt; do not
+  treat it like a `paused_for_context` local child.
+- A remote dispatch is a request, not a guarantee: on an account where the
+  cloud-execution gate isn't open, `isolation: remote` silently falls back to a
+  local worktree. Don't assume a leaf ran remotely because you asked for it —
+  read what it actually returned (its `branch:` line, its work-log path).
+
 ## Depth budget
 Respect MAX_ORCHESTRATOR_DEPTH (default 4; the runtime hard cap is 5). Your spawn
 prompt carries your current depth; a child's depth is yours + 1 and you MUST state
@@ -183,7 +210,15 @@ decomposition is wrong — flatten it (spawn leaves) or escalate.
 
 ## Integration & audits (scoped to your subtree)
 Integrate child work-logs before squash-merge (absorb / lift / promote-to-.wiki /
-drop). Then pick your **lens set from the diff** and spawn it in ONE message —
+drop). **You are the sole writer of `.wiki/`** — a child never touches it; it
+proposes in a `## Wiki proposals` section of its work-log instead (ORCHESTRATION.md
+-> PROJECT WIKI -> "When agents write to the wiki"). Apply each accepted proposal
+on your own branch at integration, and allocate every `decisions/<NNNN>` and
+`R-NNN` number yourself — single-writer is what removes the numbering race a
+fleet of concurrent leaves would otherwise hit. Log a rejection as one line in
+your own agent file: `rejected wiki proposal from <child-id>: <reason>`.
+
+Then pick your **lens set from the diff** and spawn it in ONE message —
 every lens is an independent read-only reader, and serializing them multiplies
 your gate latency for nothing.
 

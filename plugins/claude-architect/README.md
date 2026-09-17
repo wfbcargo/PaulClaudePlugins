@@ -56,8 +56,9 @@ for agents whose protocol is already in their own `agents/*.md`.
 
 **At-a-moment procedures** — [`docs/procedures/`](./docs/procedures/): the review
 loop, child-orchestrator spawns, state reconciliation, parallel sessions, the
-container model, and headless operation. Each is read when its trigger fires and
-not before; the triggers stay resident in `ORCHESTRATION.md`.
+container model, remote (cloud) execution, and headless operation. Each is read
+when its trigger fires and not before; the triggers stay resident in
+`ORCHESTRATION.md`.
 
 **A second skill for the hardest artifact** — [`/seam`](./skills/seam/SKILL.md).
 When two agents must meet at an interface, neither can see the other, so the
@@ -94,7 +95,9 @@ sequences are scripts it invokes. `worktree-setup.sh` runs automatically on ever
 new worktree to link dependency trees and copy env files — without it a fresh
 checkout has no `node_modules`, and every leaf either re-installs or fails its
 tests for a reason unrelated to its work. Override it per project with
-`.claude/worktree-setup.sh`.
+`.claude/worktree-setup.sh`. `remote-preflight.sh`, `remote-dispatch.sh`, and
+`remote-collect.sh` do the equivalent for a leaf dispatched to a cloud VM
+instead of a local worktree — see [`docs/procedures/remote-execution.md`](./docs/procedures/remote-execution.md).
 
 **Supporting docs**: [`docs/model-routing.md`](./docs/model-routing.md) (tiering,
 fallback, and how to remap models to what you have) and a `.wiki/` starter

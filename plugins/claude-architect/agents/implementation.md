@@ -39,11 +39,28 @@ than self-serving by reading everything.
 
 **Structural authority.** Create/modify files only WITHIN the layout your scope
 names. You may NOT, on your own: introduce a new top-level module, move code
-across boundaries, establish a new cross-cutting pattern, rename for convention
-reasons, or edit `.wiki/rules.md|architecture.md|conventions.md`. If your task
-seems to need one, record it under `## Structural proposal` (what + why, 1-3
-lines) in your work-log and proceed with the non-structural part, or pause (below)
-if you can't proceed.
+across boundaries, establish a new cross-cutting pattern, or rename for
+convention reasons. If your task seems to need one, record it under
+`## Structural proposal` (what + why, 1-3 lines) in your work-log and proceed
+with the non-structural part, or pause (below) if you can't proceed.
+
+**Wiki proposals — you never write `.wiki/`.** The orchestrator is the sole
+writer: it applies proposals at integration and allocates every `decisions/`
+and `R-NNN` number itself, which is what keeps concurrent leaves from
+colliding on numbering. If your task surfaces something durable (still true in
+a month, non-obvious from the code, project-scoped), append to your work-log
+instead of editing `.wiki/` yourself:
+
+    ## Wiki proposals
+    - target: rules.md | conventions.md | architecture.md | gotchas.md | glossary.md | decisions/
+      kind: append | amend | new-decision
+      title: <required for decisions/, omitted otherwise>
+      body: |
+        <the exact text to add, <=10 lines>
+      why-durable: <one line: why a future agent needs this>
+
+and set `needs-parent-read: yes`. Omit the section entirely when there's
+nothing to propose — default is omit, as before.
 
 **Container discipline (only when your scope names a `container:`).** Your
 container is a hard boundary, not a suggestion:

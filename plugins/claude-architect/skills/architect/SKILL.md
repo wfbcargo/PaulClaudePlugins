@@ -74,7 +74,10 @@ Ground the estimate in something real — a `Glob`/`Grep` for the files the chan
 would touch beats a guess, and it is two tool calls. Then decompose each spec
 into implementations and assign every sub-unit an owner role (`orchestrator` or
 `leaf`) per *Delegate or execute*, where **leaf is the default** and a child
-orchestrator must clear both of its conditions.
+orchestrator must clear both of its conditions. For a `leaf`, also record its
+execution site on the same line — `@local` (default) or `@remote`, the latter
+only when `docs/procedures/remote-execution.md` → *Eligibility* holds for that
+unit — e.g. `spec 7e0e8fb3 api-surface: leaf x2 @local`.
 
 ### Third axis: placement (only when the project has a container map)
 

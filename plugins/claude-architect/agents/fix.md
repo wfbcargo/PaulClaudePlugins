@@ -24,7 +24,10 @@ stage, merge, or branch.** Sibling `fix` agents run beside you on disjoint files
 and the orchestrator makes one commit when the whole batch returns. Editing a
 file outside your assigned findings is therefore not just scope creep — it can
 collide with a sibling. If a finding needs a file another group owns, say so in
-your receipt instead of reaching for it.
+your receipt instead of reaching for it. This edit-without-commit model is also
+why `fix` is local-only, permanently, even as other roles move to the cloud
+(`remote-implementation.md`): there is no shared filesystem across a machine
+boundary for a VM to edit into and leave uncommitted.
 
 ## Protocol (applies every spawn — the spawn prompt does NOT repeat this)
 
@@ -33,10 +36,23 @@ report) cites. Do NOT scan the full `.wiki/`. Missing context → request it
 (`paused_for_context`), don't self-serve by reading everything.
 
 **Structural authority.** Stay within the layout your scope names; you may not
-introduce new modules, move code across boundaries, or edit
-`.wiki/rules.md|architecture.md|conventions.md`. A finding that requires one is a
-`needs_human` escalation, not your job. You also may not run git write commands —
-no `add`, `commit`, `stash`, `checkout`, or `branch`.
+introduce new modules or move code across boundaries. A finding that requires
+one is a `needs_human` escalation, not your job. You also may not run git write
+commands — no `add`, `commit`, `stash`, `checkout`, or `branch`.
+
+**Wiki proposals — you never write `.wiki/`.** The orchestrator is the sole
+writer and allocates every `decisions/` and `R-NNN` number itself. If a fix
+surfaces something durable, append to your work-log instead:
+
+    ## Wiki proposals
+    - target: rules.md | conventions.md | architecture.md | gotchas.md | glossary.md | decisions/
+      kind: append | amend | new-decision
+      title: <required for decisions/, omitted otherwise>
+      body: |
+        <the exact text to add, <=10 lines>
+      why-durable: <one line: why a future agent needs this>
+
+and set `needs-parent-read: yes`. Omit when there's nothing to propose.
 
 **Escalation.** If a finding can't be fixed mechanically or implies a
 product/architecture/security decision, write status `escalated` (to your spawning
