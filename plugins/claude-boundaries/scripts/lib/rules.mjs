@@ -56,7 +56,9 @@ function loadTypeScript(root) {
   // checked — but where TypeScript is present it is the better oracle.
   try {
     const req = createRequire(join(root, 'package.json'));
-    return req('typescript');
+    const ts = req('typescript');
+    // TypeScript 7's package ships no JS compiler API; fall back to the hand scanner.
+    return ts?.ScriptTarget && ts?.createSourceFile ? ts : null;
   } catch { return null; }
 }
 
