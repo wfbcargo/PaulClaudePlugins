@@ -7,7 +7,7 @@ see `docs/procedures/remote-execution.md`).
 
 | File | Goes where | What it's for |
 | --- | --- | --- |
-| [project-settings.json](project-settings.json) | Merged into the repo's own `.claude/settings.json`, **committed** | Declares the `paul-claude-plugins` marketplace and enables `claude-architect`, because a cloud VM installs plugins only from the repo it clones — never from your `~/.claude/settings.json`. Registers the SessionStart hook that runs `cloud-install.sh`. Grants the permission rules a remote leaf needs to run unattended: a cloud session has no client to answer a permission prompt, so an uncovered tool call puts the session in `requires_action` and the leaf is lost. |
+| [project-settings.json](project-settings.json) | Merged into the repo's own `.claude/settings.json`, **committed** | Declares the `paul-claude-plugins` marketplace and enables `claude-architect`, because a cloud VM installs plugins only from the repo it clones — never from your `~/.claude/settings.json`. Registers the SessionStart hook that runs `cloud-install.sh`. Grants the file tools a remote leaf needs and denies the paths it must never touch; shell commands are left to auto mode (see *Permissions*), because a cloud session has no client to answer a prompt and an unanswered one puts it in `requires_action`, losing the leaf. |
 | [cloud-install.sh](cloud-install.sh) | **Committed** at `scripts/cloud-install.sh` | Installs project dependencies at session start, in cloud sessions only. |
 | [cloud-setup.sh](cloud-setup.sh) | **Committed** at `.claude/cloud-setup.sh`, AND its body pasted into the environment's Setup script field | Provisions the VM's toolchain (a pinned Node, an apt package) before Claude Code starts. Toolchain only — never project dependencies. |
 
@@ -45,30 +45,36 @@ it. Verify from a session with `node --version`.
 
 ## Permissions
 
-**`deny` is the load-bearing half, and it is listed first deliberately.** `deny`
-beats `allow`, so the block refuses writes to `.claude/**` — the very file that
-grants these permissions — plus reads and writes of `.env*` and key material,
-and force-pushes. Without it, a leaf acting on a prompt it should not have
-trusted can widen its own permissions, and the change reaches every
+**`deny` guards the file tools, listed first deliberately.** `deny` beats
+`allow`, so the file tools cannot write `.claude/**` — the file that grants
+these permissions — or `scripts/cloud-install.sh`, which the SessionStart hook
+executes on every session start; nor read or write `.env*` and key material.
+Without that, a leaf acting on a prompt it should not have trusted can widen
+its own permissions or plant code in the hook, and the change reaches every
 collaborator on merge. File-write rules are `Edit(path)` only: Claude Code
 matches path rules for every file-editing tool through `Edit`, and warns that
-`Write(path)` and `MultiEdit(path)` rules match nothing.
+`Write(path)` and `MultiEdit(path)` rules match nothing. If you copy the hook
+script somewhere else, move its deny rule with it.
 
-**`allow` is command-scoped on purpose.** Claude Code discards a bare `Bash`
-allow rule from project settings at load — `--debug` logs `Ignoring dangerous
-permission Bash(*) from .claude/settings.json (bypasses classifier)` — so the
-broad rule never granted anything. The template allows the git commands the
-remote protocol runs (fetch, checkout, add, commit, push, plus read-only
-status/diff/log); add your project's own — `Bash(npm run typecheck:*)`,
-`Bash(npm test:*)` — once you know which commands its leaves run.
+**`allow` grants no shell commands, on purpose.** A `Bash(<prefix>:*)` rule
+approves every flag after the prefix, and the git commands a leaf runs carry
+flags that defeat the deny block: `git push origin +branch` and
+`--force-with-lease` force-push past the two force denies, `git diff --output=`
+writes any path, `git fetch --upload-pack=` runs a command, and `git checkout
+<ref> -- .claude/settings.json` rewrites the settings file. A bare `Bash` allow
+is no alternative: Claude Code discards it at load (`--debug` logs `Ignoring
+dangerous permission Bash(*) from .claude/settings.json (bypasses classifier)`).
+So shell commands are decided by the session's permission mode — run remote
+leaves in **auto** mode, whose classifier judges each command, rather than a
+mode that prompts and leaves the session in `requires_action`. The two force
+denies stay as a backstop for the common spellings; protect the base branch on
+GitHub for the rest.
 
 **The block applies locally too — decide before you commit it.**
 `.claude/settings.json` is read by every session in the repo, not only by cloud
 ones: its `allow` rules skip prompts for a human's session too, and its `deny`
 rules bind that session as well. There is no way to scope a rule in that file to
-cloud sessions. A project unwilling to change its local permissions should drop
-the `permissions` key and dispatch remote leaves under a permission mode that
-already covers them.
+cloud sessions.
 
 **Claude cannot install these files for you, by design.** `Edit(.claude/**)`
 and the auto-mode classifier both refuse a session writing its own

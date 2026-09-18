@@ -27,6 +27,7 @@
   "permissions": {
     "deny": [
       "Edit(.claude/**)",
+      "Edit(scripts/cloud-install.sh)",
       "Edit(.env*)",
       "Read(.env*)",
       "Read(**/id_rsa)",
@@ -39,15 +40,7 @@
       "Grep",
       "Glob",
       "Write",
-      "Edit",
-      "Bash(git status:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
-      "Bash(git fetch:*)",
-      "Bash(git checkout:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Edit"
     ]
   }
 }

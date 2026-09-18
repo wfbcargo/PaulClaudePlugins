@@ -199,6 +199,26 @@ OUT="$(pf "$(home_with_logs h_flagset "$J_OK" \
   a 200101010000 "GitHub app is not installed on acme/widget (status is null)")")"
 is "T1.22 a stale not-linked log does not gate once the flag is set" "ok" "$(key "$OUT" reason)"
 
+# The newest log is usually an unrelated session; the scan must keep going.
+OUT="$(pf "$(home_with_logs h_skip "$J_NOSESS" \
+  old 200001010000 "GitHub app is not installed on acme/widget (status is null)" \
+  new 200101010000 "Parsed repository: github.com/other/thing")")"
+is "T1.23 an unrelated newest log is skipped, not taken as the answer" "not-linked" "$(key "$OUT" github_app)"
+
+# Within one log the LAST verdict wins (a session can re-check after a fix),
+# and a CRLF-terminated line still matches.
+H_LAST="$(home_with h_last "$J_NOSESS")"; mkdir -p "$H_LAST/.claude/debug"
+printf '%s\r\n' "x [DEBUG] GitHub app is not installed on acme/widget (status is null)" \
+                "x [DEBUG] GitHub app is installed on acme/widget" > "$H_LAST/.claude/debug/a.txt"
+OUT="$(pf "$H_LAST")"
+is "T1.24 the last verdict in a log wins, CRLF or not" "linked" "$(key "$OUT" github_app)"
+
+# CLAUDE_CONFIG_DIR moves the debug dir away from ~/.claude.
+H_CFG="$(home_with h_cfg "$J_NOSESS")"; mkdir -p "$TMP/cfg/debug"
+printf '%s\n' "x [DEBUG] GitHub app is not installed on acme/widget (status is null)" > "$TMP/cfg/debug/a.txt"
+OUT="$( cd "$REPO" && env HOME="$H_CFG" CLAUDE_CONFIG_DIR="$TMP/cfg" bash "$SCRIPTS/remote-preflight.sh" 2>/dev/null )"
+is "T1.25 CLAUDE_CONFIG_DIR's debug dir is the one read" "not-linked" "$(key "$OUT" github_app)"
+
 git_q "$REPO" remote set-url origin "$FX/github.com/origin.git"
 
 # ===========================================================================
@@ -377,6 +397,16 @@ is "T4.4 every emitted key is named in ORCHESTRATION.md / remote-execution.md" "
 OUT="$( cd "$REPO" && env HOME="$TMP/h_absent" bash "$SCRIPTS/remote-preflight.sh" 2>/dev/null | grep -cE '^(parser|project_key|note)' )"
 is "T4.5 parser=/project_key=/note go to stderr, not stdout" "0" "$OUT"
 
+# The settings template is copied into every consuming repo, so its shape is
+# part of the contract: path rules Claude Code ignores, or a shell allow that
+# approves flags past the deny block, would ship silently.
+PS="$DOCS/templates/project-settings.json"
+is "T4.6 no Write(path)/MultiEdit rules (only Edit(path) is matched)" "0" "$(grep -cE 'MultiEdit|"Write\(' "$PS")"
+is "T4.6 ... no Bash rule in allow" "0" "$(sed -n '/"allow"/,/]/p' "$PS" | grep -c 'Bash')"
+is "T4.6 ... the hook script is denied to the file tools" "1" "$(grep -c '"Edit(scripts/cloud-install.sh)"' "$PS")"
+is "T4.7 no doc points at the retired Settings -> Environments path" "" \
+   "$(grep -rl --exclude-dir=tests 'Settings -> Environments' "$DOCS" --include='*.md' --include='*.sh' --include='*.json')"
+
 # ===========================================================================
 # T5 — the cloud templates. cloud-install.sh runs on every session start, local
 #      ones included, so a wrong guard installs into a developer's checkout;
@@ -412,23 +442,64 @@ touch -t 203001010000 "$CI/proj/package-lock.json"
 ci remote >/dev/null
 is "T5.4 a lockfile newer than the stamp re-installs" "2" "$(calls)"
 
+# Put the lockfile back in the past first: a lockfile dated 2030 would force a
+# re-install whether or not the failed run left a stamp, and prove nothing.
 rm -f "$CI/tmp/"cloud-install.*.done
+touch -t 200001010000 "$CI/proj/package-lock.json"
 OUT="$(NPM_EXIT=1 ci remote)"; RC=$?
 case "$OUT" in *FAILED*) ok "T5.5 a failed install is reported" ;; *) bad "T5.5 a failed install is reported" "*FAILED*" "$OUT" ;; esac
 is "T5.5 ... without failing the session" "0" "$RC"
+is "T5.5 ... and leaves no stamp" "" "$(ls "$CI/tmp/" | grep '\.done$')"
 ci remote >/dev/null
-is "T5.5 ... and is retried next session (no stamp)" "4" "$(calls)"
+is "T5.5 ... so the next session retries" "4" "$(calls)"
 
-sed 's/^NODE_MAJOR=""/NODE_MAJOR="99"/' "$TPL/cloud-install.sh" > "$CI/ci-node.sh"
+OUT="$( cd "$CI" && env -u CLAUDE_PROJECT_DIR PATH="$CI/bin:$PATH" TMPDIR="$CI/tmp" CLAUDE_CODE_REMOTE=true bash "$TPL/cloud-install.sh" )"; RC=$?
+is "T5.6 CLAUDE_PROJECT_DIR unset still exits 0" "0" "$RC"
+OUT="$( cd "$CI" && env PATH="$CI/bin:$PATH" TMPDIR="$CI/tmp" CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$CI/nope" bash "$TPL/cloud-install.sh" )"; RC=$?
+is "T5.6 ... and so does a missing project dir" "0" "$RC"
+is "T5.6 ... without installing anything" "4" "$(calls)"
+
+# Pinned Node: redirect /opt into the fixture so both branches are reachable.
+sed -e 's/^NODE_MAJOR=""/NODE_MAJOR="99"/' -e "s#/opt/node#$CI/opt/node#g" "$TPL/cloud-install.sh" > "$CI/ci-node.sh"
 : > "$CI/env"
 OUT="$(CI_SCRIPT="$CI/ci-node.sh" CLAUDE_ENV_FILE="$CI/env" ci remote)"
-case "$OUT" in *"/opt/node99/bin is missing"*) ok "T5.6 a missing pinned Node is reported" ;;
-  *) bad "T5.6 a missing pinned Node is reported" "*/opt/node99/bin is missing*" "$OUT" ;; esac
-is "T5.6 ... and not put on PATH" "" "$(cat "$CI/env")"
+case "$OUT" in *"node99/bin is missing"*) ok "T5.7 a missing pinned Node is reported" ;;
+  *) bad "T5.7 a missing pinned Node is reported" "*node99/bin is missing*" "$OUT" ;; esac
+is "T5.7 ... and not put on PATH" "" "$(cat "$CI/env")"
+mkdir -p "$CI/opt/node99/bin"; printf '#!/usr/bin/env bash\necho v99.0.0\n' > "$CI/opt/node99/bin/node"
+chmod +x "$CI/opt/node99/bin/node"
+: > "$CI/env"
+CI_SCRIPT="$CI/ci-node.sh" CLAUDE_ENV_FILE="$CI/env" ci remote >/dev/null
+is "T5.8 a present pinned Node goes into CLAUDE_ENV_FILE" "export PATH=\"$CI/opt/node99/bin:\$PATH\"" "$(cat "$CI/env")"
+is "T5.8 ... even on a resumed session that installs nothing" "4" "$(calls)"
+
+# More than one lockfile: each installs once, each skips on resume.
+printf '#!/usr/bin/env bash\necho "pip $*" >> "%s/npm.calls"\n' "$CI" > "$CI/bin/pip"; chmod +x "$CI/bin/pip"
+touch "$CI/proj/requirements.txt"
+ci remote >/dev/null
+is "T5.9 a second lockfile installs alongside the first" "pip install -r requirements.txt" "$(tail -1 "$CI/npm.calls")"
+is "T5.9 ... the first stays skipped" "5" "$(calls)"
+ci remote >/dev/null
+is "T5.9 ... and both skip on resume" "5" "$(calls)"
 
 OUT="$( cd "$CI/tmp" && bash "$TPL/cloud-setup.sh" 2>&1 )"; RC=$?
-is "T5.7 cloud-setup.sh exits 0 outside any repo" "0" "$RC"
-is "T5.7 ... and does nothing with no toolchain pinned" "" "$OUT"
+is "T5.10 cloud-setup.sh exits 0 outside any repo" "0" "$RC"
+is "T5.10 ... and does nothing with no toolchain pinned" "" "$OUT"
+
+# Pinned Node in the setup script: a failed download, and a download whose
+# checksum does not verify, must both exit 0 and install nothing.
+sed -e 's/^NODE_VERSION=""/NODE_VERSION="99.0.0"/' -e "s#/opt/node#$CI/opt/setup-node#g" "$TPL/cloud-setup.sh" > "$CI/cs-node.sh"
+mkdir -p "$CI/curlfail" "$CI/curljunk"
+printf '#!/usr/bin/env bash\nexit 22\n' > "$CI/curlfail/curl"
+# writes junk to whatever -o names, so no SHASUMS line can match
+printf '#!/usr/bin/env bash\nwhile [ $# -gt 0 ]; do [ "$1" = -o ] && echo junk > "$2"; shift; done\n' > "$CI/curljunk/curl"
+chmod +x "$CI/curlfail/curl" "$CI/curljunk/curl"
+for stub in curlfail curljunk; do
+  OUT="$( cd "$CI/tmp" && env PATH="$CI/$stub:$PATH" bash "$CI/cs-node.sh" 2>&1 )"; RC=$?
+  is "T5.11 [$stub] a pinned Node that cannot be verified still exits 0" "0" "$RC"
+  is "T5.11 [$stub] ... installs nothing" "absent" "$( [ -e "$CI/opt/setup-node99" ] && echo present || echo absent )"
+  case "$OUT" in cloud-setup:*) ok "T5.11 [$stub] ... and says why" ;; *) bad "T5.11 [$stub] ... and says why" "cloud-setup:*" "$OUT" ;; esac
+done
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -16,7 +16,8 @@
 
 # Local sessions keep whatever the developer installed.
 [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
-cd "${CLAUDE_PROJECT_DIR:?}" || exit 0
+# Not `${CLAUDE_PROJECT_DIR:?}`: a failed :? expansion exits 1 before `||` runs.
+[ -n "${CLAUDE_PROJECT_DIR:-}" ] && cd "$CLAUDE_PROJECT_DIR" 2>/dev/null || exit 0
 
 # --- toolchain PATH ----------------------------------------------------------
 # Match NODE_VERSION's major in .claude/cloud-setup.sh; empty keeps the VM
@@ -39,15 +40,18 @@ LOG="$TMP_DIR/cloud-install.log"
 
 # install_deps <lockfile> <command...>
 # Runs the command when <lockfile> exists, then stamps success in the temp dir.
-# A stamp newer than the lockfile means this VM already installed this lockfile,
-# so a resumed session skips; a lockfile changed by a checkout re-installs. The
-# temp dir is the right home: it lives exactly as long as the VM, and nothing
-# in it can be committed by a leaf's `git add`.
+# A stamp the lockfile is not newer than means this VM already installed this
+# lockfile, so a resumed session skips; a lockfile changed by a checkout
+# re-installs. Asked as "lock not newer than stamp", not "stamp newer than
+# lock": bash 3.2 compares whole seconds, and a stamp written in the same
+# second as the lockfile would otherwise re-install on every resume. The temp
+# dir is the right home: it lives exactly as long as the VM, and nothing in it
+# can be committed by a leaf's `git add`.
 install_deps() {
   local lock="$1"; shift
   local stamp="$TMP_DIR/cloud-install.${lock//\//_}.done"
   [ -f "$lock" ] || return 0
-  [ "$stamp" -nt "$lock" ] && return 0
+  [ -f "$stamp" ] && ! [ "$lock" -nt "$stamp" ] && return 0
   if "$@" >>"$LOG" 2>&1; then
     touch "$stamp"
     echo "cloud-install: $* succeeded."

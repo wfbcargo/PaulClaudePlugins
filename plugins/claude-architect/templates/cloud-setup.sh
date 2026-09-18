@@ -45,10 +45,20 @@ if [ -n "$NODE_VERSION" ]; then
   if [ -z "$arch" ]; then
     echo "cloud-setup: unknown arch $(uname -m); skipping Node $NODE_VERSION"
   elif [ ! -x "$node_dir/bin/node" ]; then
-    mkdir -p "$node_dir"
-    curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${arch}.tar.xz" \
-      | tar -xJ -C "$node_dir" --strip-components=1 \
-      || { echo "cloud-setup: Node $NODE_VERSION download failed; sessions fall back to the VM default"; rm -rf "$node_dir"; }
+    # Verified against the release's SHASUMS256.txt before anything is
+    # extracted: this runs as root and its output is every session's `node`.
+    dist="https://nodejs.org/dist/v${NODE_VERSION}"
+    tarball="node-v${NODE_VERSION}-linux-${arch}.tar.xz"
+    dl="$(mktemp -d)"
+    if curl -fsSL -o "$dl/$tarball" "$dist/$tarball" \
+       && curl -fsSL -o "$dl/SHASUMS256.txt" "$dist/SHASUMS256.txt" \
+       && (cd "$dl" && grep " $tarball\$" SHASUMS256.txt | sha256sum -c - >/dev/null 2>&1); then
+      mkdir -p "$node_dir" && tar -xJf "$dl/$tarball" -C "$node_dir" --strip-components=1 \
+        || { echo "cloud-setup: Node $NODE_VERSION did not extract; sessions fall back to the VM default"; rm -rf "$node_dir"; }
+    else
+      echo "cloud-setup: Node $NODE_VERSION download or checksum failed; sessions fall back to the VM default"
+    fi
+    rm -rf "$dl"
   fi
   "$node_dir/bin/node" --version 2>/dev/null || true
 fi
