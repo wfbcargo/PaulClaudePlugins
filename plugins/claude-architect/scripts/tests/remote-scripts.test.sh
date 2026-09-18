@@ -62,7 +62,7 @@ mkfixture
 J_OK="{\"oauthAccount\":{\"a\":1},\"hasRemoteEnvironment\":true,\"projects\":{\"$RK\":{\"hasUsedRemoteSession\":true}}}"
 H_OK="$(home_with h_ok "$J_OK")"
 
-pf() { ( cd "$REPO" && env HOME="$1" ${2:+CLAUDE_CODE_REMOTE=1} bash "$SCRIPTS/remote-preflight.sh" 2>/dev/null ); }
+pf() { ( cd "$REPO" && env -u CLAUDE_CONFIG_DIR HOME="$1" ${2:+CLAUDE_CODE_REMOTE=1} bash "$SCRIPTS/remote-preflight.sh" 2>/dev/null ); }
 
 OUT="$(pf "$H_OK")"
 is "T1.1 all local conditions pass -> reason=ok" "ok" "$(key "$OUT" reason)"
@@ -146,12 +146,60 @@ git_q "$REPO" checkout -- .claude/settings.json
 
 touch "$REPO/.claude/cloud-setup.sh"
 OUT="$(pf "$H_OK")"
-is "T1.15 an UNCOMMITTED cloud-setup.sh does not count (a VM clones)" "no" "$(key "$OUT" setup_script)"
+is "T1.15 an UNCOMMITTED cloud-setup.sh does not count (a VM clones)" "no" "$(key "$OUT" setup_script_committed)"
 git_q "$REPO" add -A; git_q "$REPO" commit -m "add cloud-setup"
 OUT="$(pf "$H_OK")"
-is "T1.15 ... a committed one does" "yes" "$(key "$OUT" setup_script)"
+is "T1.15 ... a committed one does" "yes" "$(key "$OUT" setup_script_committed)"
 
 is "T1.16 preflight always exits 0" "0" "$( ( cd "$REPO" && env HOME="$TMP/h_absent" bash "$SCRIPTS/remote-preflight.sh" >/dev/null 2>&1 ); echo $? )"
+
+# --- github_app: read from the newest `claude --cloud --debug` log -----------
+# Needs an owner/repo origin, so move origin under github.com/acme/widget.git.
+git clone -q --bare "$FX/github.com/origin.git" "$FX/github.com/acme/widget.git"
+git_q "$REPO" remote set-url origin "$FX/github.com/acme/widget.git"
+J_NOSESS="{\"oauthAccount\":{\"a\":1},\"hasRemoteEnvironment\":true,\"projects\":{\"$RK\":{}}}"
+
+# home_with_logs <name> <claude.json> [<log name> <touch -t stamp> <line>]... — writes each
+# debug log with the given line and backdates it, so `ls -t` order is fixed.
+home_with_logs() {
+  local h; h="$(home_with "$1" "$2")"; shift 2
+  mkdir -p "$h/.claude/debug"
+  while [ $# -ge 3 ]; do
+    printf '2026-09-18T15:28:48.181Z [DEBUG] %s\n' "$3" > "$h/.claude/debug/$1.txt"
+    touch -t "$2" "$h/.claude/debug/$1.txt"
+    shift 3
+  done
+  echo "$h"
+}
+
+OUT="$(pf "$(home_with h_nolog "$J_NOSESS")")"
+is "T1.17 no debug log -> github_app=unknown" "unknown" "$(key "$OUT" github_app)"
+is "T1.17 ... and the generic gate reason" "gate-off:remote-agents-not-enabled" "$(key "$OUT" reason)"
+
+OUT="$(pf "$(home_with_logs h_notlinked "$J_NOSESS" \
+  a 200101010000 "GitHub app is not installed on acme/widget (status is null)")")"
+is "T1.18 logged 'not installed' -> github_app=not-linked" "not-linked" "$(key "$OUT" github_app)"
+is "T1.18 ... and names it as the reason" "gate-off:github-app-not-linked" "$(key "$OUT" reason)"
+
+OUT="$(pf "$(home_with_logs h_newest "$J_NOSESS" \
+  old 200001010000 "GitHub app is not installed on acme/widget (status is null)" \
+  new 200101010000 "GitHub app is installed on acme/widget")")"
+is "T1.19 the newest log wins" "linked" "$(key "$OUT" github_app)"
+is "T1.19 ... linked but flag unset -> the generic gate" "gate-off:remote-agents-not-enabled" "$(key "$OUT" reason)"
+
+OUT="$(pf "$(home_with_logs h_prefix "$J_NOSESS" \
+  a 200101010000 "GitHub app is not installed on acme/widget-v2 (status is null)")")"
+is "T1.20 a log about acme/widget-v2 says nothing about acme/widget" "unknown" "$(key "$OUT" github_app)"
+
+OUT="$(pf "$(home_with_logs h_case "$J_NOSESS" \
+  a 200101010000 "GitHub app is not installed on ACME/Widget (status is null)")")"
+is "T1.21 repo names match case-insensitively" "not-linked" "$(key "$OUT" github_app)"
+
+OUT="$(pf "$(home_with_logs h_flagset "$J_OK" \
+  a 200101010000 "GitHub app is not installed on acme/widget (status is null)")")"
+is "T1.22 a stale not-linked log does not gate once the flag is set" "ok" "$(key "$OUT" reason)"
+
+git_q "$REPO" remote set-url origin "$FX/github.com/origin.git"
 
 # ===========================================================================
 # T2 — squash-up.sh: the local path must not have changed meaning, and
@@ -311,14 +359,14 @@ DOCTEXT="$(cat "$DOCS/ORCHESTRATION.md" "$DOCS/docs/procedures/remote-execution.
 
 OUT="$( cd "$REPO" && env HOME="$TMP/h_absent" bash "$SCRIPTS/remote-preflight.sh" 2>/dev/null | keys_of )"
 is "T4.1 preflight stdout keys" \
-   "base_pushed default_branch origin plugin_declared reason remote_available setup_script " "$OUT"
+   "base_pushed default_branch github_app origin plugin_declared reason remote_available setup_script_committed " "$OUT"
 OUT="$( cd "$REPO" && bash "$SCRIPTS/remote-dispatch.sh" impl w main 2>/dev/null | keys_of )"
 is "T4.2 dispatch stdout keys" "base branch export_dir unit_id " "$OUT"
 OUT="$( cd "$REPO" && bash "$SCRIPTS/remote-collect.sh" "main--impl/0_x" 2>/dev/null | keys_of )"
 is "T4.3 collect stdout keys" "commits export_log fetched status " "$OUT"
 
 MISSING=""
-for k in remote_available reason origin default_branch base_pushed plugin_declared setup_script \
+for k in remote_available reason origin default_branch base_pushed plugin_declared setup_script_committed github_app \
          base branch unit_id export_log fetched commits status merged into parent_worktree; do
   PAT='`'"$k"'=`'
   case "$DOCTEXT" in *"$PAT"*) : ;; *) MISSING="$MISSING $k" ;; esac
@@ -328,6 +376,59 @@ is "T4.4 every emitted key is named in ORCHESTRATION.md / remote-execution.md" "
 # diagnostics must stay OFF stdout, or they corrupt the caller's parse
 OUT="$( cd "$REPO" && env HOME="$TMP/h_absent" bash "$SCRIPTS/remote-preflight.sh" 2>/dev/null | grep -cE '^(parser|project_key|note)' )"
 is "T4.5 parser=/project_key=/note go to stderr, not stdout" "0" "$OUT"
+
+# ===========================================================================
+# T5 — the cloud templates. cloud-install.sh runs on every session start, local
+#      ones included, so a wrong guard installs into a developer's checkout;
+#      cloud-setup.sh blocks every repo in an environment if it exits non-zero.
+# ===========================================================================
+TPL="$DOCS/templates"
+CI="$TMP/ci"; rm -rf "$CI"; mkdir -p "$CI/proj" "$CI/bin" "$CI/tmp"
+echo '{}' > "$CI/proj/package-lock.json"
+# a fake npm that records each call and exits $NPM_EXIT
+printf '#!/usr/bin/env bash\necho "$*" >> "%s/npm.calls"\nexit "${NPM_EXIT:-0}"\n' "$CI" > "$CI/bin/npm"
+chmod +x "$CI/bin/npm"
+
+ci() { # [remote] — run the template against $CI/proj with the fake npm
+  ( cd "$CI" && env PATH="$CI/bin:$PATH" TMPDIR="$CI/tmp" CLAUDE_PROJECT_DIR="$CI/proj" \
+      ${1:+CLAUDE_CODE_REMOTE=true} ${NPM_EXIT:+NPM_EXIT=$NPM_EXIT} bash "${CI_SCRIPT:-$TPL/cloud-install.sh}" )
+}
+calls() { [ -f "$CI/npm.calls" ] && wc -l < "$CI/npm.calls" | tr -d ' ' || echo 0; }
+
+OUT="$(ci)"; RC=$?
+is "T5.1 a local session installs nothing" "0" "$(calls)"
+is "T5.1 ... says nothing"                 "" "$OUT"
+is "T5.1 ... and exits 0"                  "0" "$RC"
+
+OUT="$(ci remote)"
+is "T5.2 a cloud session runs npm ci once" "1" "$(calls)"
+is "T5.2 ... with the lockfile install flags" "ci --no-audit --no-fund" "$(tail -1 "$CI/npm.calls")"
+case "$OUT" in *succeeded*) ok "T5.2 ... and reports success" ;; *) bad "T5.2 ... and reports success" "*succeeded*" "$OUT" ;; esac
+
+ci remote >/dev/null
+is "T5.3 a resumed session skips the install" "1" "$(calls)"
+
+touch -t 203001010000 "$CI/proj/package-lock.json"
+ci remote >/dev/null
+is "T5.4 a lockfile newer than the stamp re-installs" "2" "$(calls)"
+
+rm -f "$CI/tmp/"cloud-install.*.done
+OUT="$(NPM_EXIT=1 ci remote)"; RC=$?
+case "$OUT" in *FAILED*) ok "T5.5 a failed install is reported" ;; *) bad "T5.5 a failed install is reported" "*FAILED*" "$OUT" ;; esac
+is "T5.5 ... without failing the session" "0" "$RC"
+ci remote >/dev/null
+is "T5.5 ... and is retried next session (no stamp)" "4" "$(calls)"
+
+sed 's/^NODE_MAJOR=""/NODE_MAJOR="99"/' "$TPL/cloud-install.sh" > "$CI/ci-node.sh"
+: > "$CI/env"
+OUT="$(CI_SCRIPT="$CI/ci-node.sh" CLAUDE_ENV_FILE="$CI/env" ci remote)"
+case "$OUT" in *"/opt/node99/bin is missing"*) ok "T5.6 a missing pinned Node is reported" ;;
+  *) bad "T5.6 a missing pinned Node is reported" "*/opt/node99/bin is missing*" "$OUT" ;; esac
+is "T5.6 ... and not put on PATH" "" "$(cat "$CI/env")"
+
+OUT="$( cd "$CI/tmp" && bash "$TPL/cloud-setup.sh" 2>&1 )"; RC=$?
+is "T5.7 cloud-setup.sh exits 0 outside any repo" "0" "$RC"
+is "T5.7 ... and does nothing with no toolchain pinned" "" "$OUT"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

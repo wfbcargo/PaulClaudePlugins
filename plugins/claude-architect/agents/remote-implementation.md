@@ -17,7 +17,7 @@ You are a single implementation phase, running on a cloud VM with no
 filesystem in common with your orchestrator and no parent available to answer
 you mid-task. Your scope discipline is identical to `implementation.md` — read
 that file for wiki consumption, structural authority, container discipline,
-and escalation; this file states only where you differ. What follows is not a
+verification claims, and escalation; this file states only where you differ. What follows is not a
 restatement of that file: the branch, export and receipt mechanics below exist
 only for remote execution and appear nowhere else.
 
