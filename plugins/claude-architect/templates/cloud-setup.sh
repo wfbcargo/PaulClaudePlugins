@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 # Cloud-environment setup script — the remote analogue of scripts/worktree-setup.sh.
 #
-# NOT committed and run by this framework. Paste the body of this file into the
-# "Setup script" field of the environment dialog at claude.ai/code (Settings ->
-# Environments, or when creating one). Claude Code runs it once, before the
+# Commit this file to the repo at .claude/cloud-setup.sh — that committed copy
+# is the version-controlled source of truth (reviewable and diffable like any
+# other script) and is also what scripts/remote-preflight.sh checks for when it
+# reports setup_script=. Committing it is NOT enough to run it: claude.ai/code
+# never reads or executes a file from the repo for this purpose. Paste the same
+# body into the "Setup script" field of the environment dialog at
+# claude.ai/code (Settings -> Environments, or when creating one) — that pasted
+# copy is what actually executes. Keep the two in sync by hand; nothing
+# enforces that they match. Claude Code runs the pasted script once, before the
 # session's Claude Code process starts, then snapshots the filesystem. Every
 # session dispatched into that environment for roughly the next seven days reuses
 # the snapshot instead of re-running this script — so what it installs is what
@@ -19,7 +25,7 @@
 #     here is gone by the time a session resumes the snapshot. A dev server or
 #     watcher that must be running at session start belongs in a SessionStart
 #     hook in the repo's .claude/settings.json instead (see
-#     project-settings.template.json and this directory's README) — that hook
+#     project-settings.json and this directory's README) — that hook
 #     runs on every session, local and cloud, whereas this script runs once per
 #     snapshot and only on the VM.
 #

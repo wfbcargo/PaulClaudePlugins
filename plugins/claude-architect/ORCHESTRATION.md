@@ -45,12 +45,12 @@ reconstructing the commands:
 | Script | Does |
 |--------|------|
 | `scripts/new-worktree.sh <tier> <slug> [parent]` | Dirty-check, id, branch, worktree, `[target:]` commit, work-log dirs, dependency setup. Prints `branch=` / `worktree=` / `unit_id=` / `target=`. |
-| `scripts/squash-up.sh <branch> <msg> [--from-origin] [--keep-worktree]` | Squash into the derived parent, commit, remove worktree, delete branch. `--from-origin` for a branch that lives on a remote leaf's push rather than a local worktree. Exits 2 on conflict having committed nothing. |
+| `scripts/squash-up.sh <branch> <msg> [--from-origin] [--keep-worktree]` | Squash into the derived parent, commit, remove worktree, delete branch. `--from-origin` for a branch that lives on a remote leaf's push rather than a local worktree. Prints `merged=` / `into=` / `parent_worktree=`. Exits 2 on conflict having committed nothing, and 3 when the leaf pushed only a work-log (a failure or escalation) — nothing merged, `origin/<branch>` kept. |
 | `scripts/containers.mjs <cmd>` | Container map: `validate` / `check [--changed]` / `where <path>` / `scope <id>` / `emit`. No-ops loudly when the project has no `.wiki/containers.yaml`. |
 | `scripts/worktree-setup.sh <main> <worktree>` | Called automatically by `new-worktree.sh`. Links dependency trees, copies env files. Override per project with `.claude/worktree-setup.sh`. |
-| `scripts/remote-preflight.sh` | Checks remote eligibility in one call. Prints `remote_available=` / `reason=` / `origin=` / `default_branch=` / `base_pushed=` / `plugin_declared=` / `setup_script=`. |
-| `scripts/remote-dispatch.sh <tier> <slug> <parent>` | Pushes the base, dispatches with `isolation: remote`. Prints `base=` / `branch=` / `unit_id=` / `export_log=`. |
-| `scripts/remote-collect.sh <branch>` | Fetches a remote leaf's pushed branch and receipt. Prints `fetched=` / `export_log=` / `commits=` / `status=`. |
+| `scripts/remote-preflight.sh` | Checks the origin and plugin-declaration eligibility conditions (see `docs/procedures/remote-execution.md` → *Eligibility*). Prints `remote_available=` / `reason=` / `origin=` / `default_branch=` / `base_pushed=` / `plugin_declared=` / `setup_script=`. |
+| `scripts/remote-dispatch.sh <tier> <slug> <parent>` | Pushes the base and derives the leaf's id/branch — you still make the Agent call yourself with `isolation: remote`. Prints `base=` / `branch=` / `unit_id=` / `export_dir=`. |
+| `scripts/remote-collect.sh <branch>` | Fetches a remote leaf's pushed branch and reports where its receipt lives — it does not read the receipt for you. Prints `fetched=` / `export_log=` / `commits=` / `status=`. |
 
 ---
 
@@ -80,11 +80,9 @@ before the orchestrator notices. Raise them if your runs are genuinely
 converging and your I/O has headroom.
 
 `MAX_CONCURRENT_REMOTE_AGENTS` is a separate knob, not a shared pool with
-`MAX_CONCURRENT_AGENTS`, because the two are bound by different resources. A
-local leaf's ceiling is disk: worktrees on this machine. A remote leaf costs
-this account's rate limit and no local disk at all, so the local ceiling says
-nothing about how many cloud sessions the account can sustain concurrently, and
-raising one must never silently raise the other.
+`MAX_CONCURRENT_AGENTS` — the two are bound by different resources (local disk
+vs. this account's rate limit). Raising one must never silently raise the
+other; see `docs/procedures/remote-execution.md` → *Environment facts* for why.
 
 ---
 
@@ -703,7 +701,7 @@ Written once at end of work, before squash-merge:
 agent_id: <full ID>
 role: implementation | review | fix | merge | other
 status: completed | escalated | failed | paused_for_context | exhausted
-wiki_updates: <list of .wiki/ paths touched, or "none">
+wiki_proposals: <count of entries in your "## Wiki proposals" section, or "none">
 continuation: <n>            # omit unless this agent resumed from a continue file
 ---
 # <one-line summary>
@@ -711,6 +709,11 @@ continuation: <n>            # omit unless this agent resumed from a continue fi
 - <factual bullet, 3-5 total, no narration>
 ## What changed
 - <file path>
+## Wiki proposals
+<Omit when there's nothing to propose (default). Otherwise one entry per
+proposal, same shape `agents/implementation.md` / `agents/fix.md` specify
+(`target:`, `kind:`, `title:`, `body:`, `why-durable:`) — see either file for
+the exact block. Presence of this section implies `needs-parent-read: yes`.>
 ## What the next agent needs to know
 <Omit unless ALL of: a future agent in THIS unit will need it; not visible from
 the diff; not durable enough for .wiki/ (if durable, put it there); <10 lines.>

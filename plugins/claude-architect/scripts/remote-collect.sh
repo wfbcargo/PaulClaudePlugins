@@ -58,7 +58,13 @@ if [ "$FETCHED" = "yes" ]; then
     COMMITS="$(git rev-list --count "${BASE_REF}..refs/remotes/origin/${BRANCH}" 2>/dev/null || echo 0)"
   fi
 
-  if [ "$COMMITS" -gt 0 ]; then
+  if [ -z "$BASE_REF" ]; then
+    # Distinct from `empty`: the branch is there, but its parent could not be
+    # resolved locally or on origin, so the ahead-count is meaningless rather
+    # than zero. Usually a parent that was never pushed, or a branch name whose
+    # `--` derivation pointed at nothing.
+    STATUS="no-base"
+  elif [ "$COMMITS" -gt 0 ]; then
     STATUS="ok"
   else
     STATUS="empty"

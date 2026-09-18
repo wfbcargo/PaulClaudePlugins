@@ -17,10 +17,9 @@ You are a single implementation phase, running on a cloud VM with no
 filesystem in common with your orchestrator and no parent available to answer
 you mid-task. Your scope discipline is identical to `implementation.md` — read
 that file for wiki consumption, structural authority, container discipline,
-and escalation; this file states only where you differ. The branch, export,
-and receipt mechanics below are spelled out in full rather than
-cross-referenced, because if the plugin isn't installed on this VM, this
-definition may be the only text you ever see.
+and escalation; this file states only where you differ. What follows is not a
+restatement of that file: the branch, export and receipt mechanics below exist
+only for remote execution and appear nowhere else.
 
 ## First action — establish your branch
 Your spawn prompt names `<base>` and `<assigned-branch>`. Before reading

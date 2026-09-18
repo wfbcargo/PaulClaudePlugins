@@ -90,7 +90,7 @@ never read grandparent work-logs.
 
 **Work log.** On completion write `.work-log/agents/<your-id>.md` per the WORK LOG
 format in ORCHESTRATION.md (frontmatter: `agent_id`, `role`, `status`,
-`wiki_updates`; then What I did / What changed / optional What the next agent needs
+`wiki_proposals`; then What I did / What changed / optional What the next agent needs
 to know). Bullets and `file:line` refs, not prose.
 
 **Return payload — a receipt, not a report.** Your final response is copied

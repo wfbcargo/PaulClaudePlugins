@@ -17,7 +17,7 @@ plus leaves.
 
 ## What's in the box
 
-**Nine role-pinned subagents** (`agents/`), auto-discovered by Claude Code once
+**Ten role-pinned subagents** (`agents/`), auto-discovered by Claude Code once
 installed:
 
 | Agent | Role |
@@ -100,12 +100,13 @@ tests for a reason unrelated to its work. Override it per project with
 instead of a local worktree — see [`docs/procedures/remote-execution.md`](./docs/procedures/remote-execution.md).
 
 **Supporting docs**: [`docs/model-routing.md`](./docs/model-routing.md) (tiering,
-fallback, and how to remap models to what you have) and a `.wiki/` starter
-skeleton in [`wiki-template/`](./wiki-template/).
+fallback, and how to remap models to what you have), a `.wiki/` starter
+skeleton in [`wiki-template/`](./wiki-template/), and remote (cloud) execution
+templates in [`templates/`](./templates/).
 
 **Illustrated overview**: [`docs/framework.html`](./docs/framework.html) — a
 single self-contained page covering the run shape, the six process stages, all
-nine agent roles with their tiers and tool grants, the review boundaries, and
+ten agent roles with their tiers and tool grants, the review boundaries, and
 the tuning knobs. Open it in a browser; it's the fastest way to hand someone the
 whole model at once.
 

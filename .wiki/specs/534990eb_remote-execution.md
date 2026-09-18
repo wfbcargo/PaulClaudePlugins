@@ -123,9 +123,9 @@ re-dispatches with the answer appended.
 | Script | Prints |
 |---|---|
 | `remote-preflight.sh` | `remote_available=`, `reason=`, `origin=`, `default_branch=`, `base_pushed=`, `plugin_declared=`, `setup_script=` |
-| `remote-dispatch.sh <tier> <slug> <parent>` | `base=`, `branch=`, `unit_id=`, `export_log=` |
+| `remote-dispatch.sh <tier> <slug> <parent>` | `base=`, `branch=`, `unit_id=`, `export_dir=` (a directory — no agent id exists yet) |
 | `remote-collect.sh <branch>` | `fetched=`, `export_log=`, `commits=`, `status=` |
-| `squash-up.sh <branch> <msg> [--from-origin] [--keep-worktree]` | `merged=`, `into=`, `parent_worktree=` (unchanged) |
+| `squash-up.sh <branch> <msg> [--from-origin] [--keep-worktree]` | `merged=`, `into=`, `parent_worktree=`; or `merged=none`, `status=empty-after-strip` with exit 3 |
 
 ### S8. Eligibility predicate (v1)
 A unit may be dispatched remotely only when ALL hold: role is `implementation`;

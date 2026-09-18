@@ -24,6 +24,16 @@ set -euo pipefail
 
 TIER="${1:?tier required: impl (the only tier eligible for remote in v1)}"
 SLUG="${2:?slug required}"
+# `--` separates tiers in a branch name, so a slug containing one silently
+# corrupts the ${BRANCH%--*} parent derivation that remote-collect.sh and
+# squash-up.sh each re-derive independently: the unit merges into the wrong
+# parent, or into a branch that does not exist. A leading `-` would reach git
+# in option position. Refuse at the one place the name is built.
+case "$SLUG" in
+  *--*)  echo "refusing: slug '$SLUG' contains '--', which separates tiers in a branch name and would corrupt the parent derivation" >&2; exit 1 ;;
+  -*)    echo "refusing: slug '$SLUG' starts with '-'" >&2; exit 1 ;;
+  "")    echo "refusing: empty slug" >&2; exit 1 ;;
+esac
 PARENT="${3:?parent branch required — remote-dispatch has no implicit current-branch default, see header}"
 
 if [ "$TIER" != "impl" ]; then
@@ -59,18 +69,23 @@ if [ -n "$DIRTY_PARENT" ] && [ -n "$(git -C "$DIRTY_PARENT" status --porcelain)"
   echo "warning: '${PARENT}' has uncommitted changes in ${DIRTY_PARENT} — they will NOT reach the remote leaf" >&2
 fi
 
-echo "pushing base '${PARENT}' to origin..." >&2
-git push -u origin "${PARENT}:${PARENT}" >&2
-
+# Derive the id/branch BEFORE the push: this is the last failure point
+# (a missing `openssl`) and the push is the only irreversible step in this
+# script — nothing should be able to fail after it with no id returned.
 UNIT_ID="$(openssl rand -hex 4)"
 BRANCH="${PARENT}--${TIER}/${UNIT_ID}_${SLUG}"
 
-# The directory a remote leaf commits its work-log export into. Not a
-# discovered file — remote-collect.sh reports the actual path it finds once
-# the leaf has pushed; this is the convention to hand the spawned leaf.
-EXPORT_LOG=".work-log-export"
+echo "pushing base '${PARENT}' to origin..." >&2
+git push -u origin "${PARENT}:${PARENT}" >&2
+
+# The directory a remote leaf commits its work-log export into — a directory,
+# not a discovered file (the leaf's own id, part of the filename, doesn't
+# exist yet at dispatch time). remote-collect.sh reports the actual file path
+# it finds once the leaf has pushed, under its own `export_log=` key; this
+# key is named `export_dir` so the two are never confused for each other.
+EXPORT_DIR=".work-log-export"
 
 echo "base=${PARENT}"
 echo "branch=${BRANCH}"
 echo "unit_id=${UNIT_ID}"
-echo "export_log=${EXPORT_LOG}"
+echo "export_dir=${EXPORT_DIR}"

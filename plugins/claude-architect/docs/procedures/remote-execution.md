@@ -18,8 +18,16 @@ A unit goes remote only when ALL hold:
 - the base branch is pushed to that origin
 - the project declares this plugin in its `.claude/settings.json`
 
-Any one false → dispatch local, same as today. Run `scripts/remote-preflight.sh`
-to check all five in one call; do not re-derive them by hand.
+Any one false → dispatch local, same as today. `scripts/remote-preflight.sh`
+checks two of these directly — the GitHub origin and the plugin declaration —
+and folds both into its `remote_available=` verdict (`reason=no-origin` /
+`origin-not-github` / `plugin-not-declared`), plus the account-side gate (see
+*Environment facts* below). It cannot observe your role or `REMOTE_EXECUTION`;
+establish those two yourself before calling it. It also prints `base_pushed=`,
+but that key does NOT gate the verdict: step 2 below has `remote-dispatch.sh`
+push the base itself, so an unpushed base at preflight time is the normal
+state before you've reached step 2, not a reason to refuse — read it as
+information.
 
 ## Dispatch sequence
 
@@ -34,12 +42,14 @@ to check all five in one call; do not re-derive them by hand.
    below).
 3. **Dispatch.** `scripts/remote-dispatch.sh <tier> <slug> <parent>` with
    `isolation: remote` on the Agent call. Prints `base=`, `branch=`, `unit_id=`,
-   `export_log=`. The leaf's own first action is
+   `export_dir=` — a directory, because at dispatch time the leaf's agent id
+   does not exist yet and there is no file to name. The leaf's own first action is
    `git fetch origin && git checkout -B <assigned-branch> origin/<base>`; its
    last is `git push -u origin <assigned-branch>`. Spawn prompt is otherwise
    the same template as a local leaf.
 4. **Collect.** `scripts/remote-collect.sh <branch>` fetches the pushed branch
-   and prints `fetched=`, `export_log=`, `commits=`, `status=`. Read the
+   and prints `fetched=`, `export_log=` (here a discovered FILE path, unlike
+   dispatch's `export_dir=`), `commits=`, `status=`. Read the
    leaf's receipt from its export log exactly as you would a local
    `.work-log/agents/<id>.md` — the contract is identical, plus the
    `branch:` line.
@@ -47,6 +57,16 @@ to check all five in one call; do not re-derive them by hand.
    `--from-origin` flag is what tells the script the branch lives on the
    remote, not in a local worktree it can `cd` into; it also deletes
    `.work-log-export/` as part of the squash commit so it never reaches a PR.
+
+   **Exit 3 is a normal outcome, not an error.** A leaf that returned `failed`
+   or `escalated` still commits and pushes just its work-log, so once the export
+   path is stripped there is nothing left to merge. The script backs the squash
+   out, prints `merged=none` and `status=empty-after-strip`, keeps
+   `origin/<branch>`, and exits 3. The branch is kept because it then holds the
+   only copy of that leaf's log. Read it with `remote-collect.sh`, re-dispatch,
+   and delete the branch by hand once you are done. Treating exit 3 as success
+   is how an escalation gets silently dropped; treating it as a script failure
+   is how a run stalls on a unit that behaved correctly.
 
 ## A remote leaf returns `failed` for missing context
 
@@ -90,8 +110,8 @@ successful dispatch is therefore not proof of remote execution** — check
 `remote-preflight.sh`'s `remote_available=` before trusting that a leaf ran on
 a VM rather than next to you.
 
-**The base-branch rule fails silently too.** There is no per-agent base parameter
-exists. If the base isn't pushed when the leaf starts, it bases itself on the
+**The base-branch rule fails silently too.** There is no per-agent base
+parameter. If the base isn't pushed when the leaf starts, it bases itself on the
 repo default branch instead — no error, just a leaf building on the wrong
 commit. Pushing the base before dispatch (step 2 above) is the only guard.
 

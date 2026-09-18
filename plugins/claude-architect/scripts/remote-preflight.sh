@@ -44,8 +44,12 @@ if [ -n "$ORIGIN" ] && [ -n "$CURRENT_BRANCH" ]; then
   fi
 fi
 
+# Read the COMMITTED tree, not the working tree: the VM clones what got
+# pushed, not what's sitting uncommitted in this checkout (see plugin_declared
+# below for the same reasoning; a project's setup script is version-controlled
+# at this path and pasted into the cloud environment dialog from there).
 SETUP_SCRIPT="no"
-[ -f "$INVOKE_DIR/.claude/cloud-setup.sh" ] && SETUP_SCRIPT="yes"
+git -C "$INVOKE_DIR" cat-file -e HEAD:.claude/cloud-setup.sh 2>/dev/null && SETUP_SCRIPT="yes"
 
 # ---------------------------------------------------------------------------
 # ~/.claude.json + .claude/settings.json — need a JSON parser. Try python3,
@@ -66,7 +70,21 @@ find_python() {
 }
 
 CLAUDE_JSON="$HOME/.claude.json"
+
+# plugin_declared has to answer for what the VM will actually clone, which is
+# the COMMITTED tree — not this checkout's working copy. An uncommitted or
+# locally-edited .claude/settings.json would otherwise report "yes" for a base
+# push that carries no such declaration at all. Materialize HEAD's copy into a
+# temp file for the parser; fall back to the working-tree file only if HEAD
+# has none (e.g. the repo has never committed a .claude/ at all).
 SETTINGS_JSON="$INVOKE_DIR/.claude/settings.json"
+SETTINGS_TMP=""
+if COMMITTED_SETTINGS="$(git -C "$INVOKE_DIR" show HEAD:.claude/settings.json 2>/dev/null)" && [ -n "$COMMITTED_SETTINGS" ]; then
+  SETTINGS_TMP="$(mktemp)"
+  printf '%s' "$COMMITTED_SETTINGS" >"$SETTINGS_TMP"
+  SETTINGS_JSON="$SETTINGS_TMP"
+fi
+trap '[ -n "$SETTINGS_TMP" ] && rm -f "$SETTINGS_TMP"' EXIT
 
 # Project key in ~/.claude.json uses forward slashes even on Windows
 # (verified against a real ~/.claude.json: the key is the drive-letter
@@ -119,7 +137,7 @@ else:
                 has_plugin = True
                 break
     # extraKnownMarketplaces has shown up as both a list and an object keyed
-    # by marketplace name (see wiki-template/project-settings.template.json)
+    # by marketplace name (see templates/project-settings.json)
     # — accept either, "declared" just means non-empty.
     has_marketplace = isinstance(marketplaces, (list, dict)) and len(marketplaces) > 0
     print("plugin_declared=" + ("yes" if (has_plugin and has_marketplace) else "no"))
@@ -176,7 +194,7 @@ if (s === null) {
     }
   }
   // extraKnownMarketplaces has shown up as both a list and an object keyed
-  // by marketplace name (see wiki-template/project-settings.template.json)
+  // by marketplace name (see templates/project-settings.json)
   // — accept either, "declared" just means non-empty.
   const hasMarketplace = marketplaces && typeof marketplaces === "object" &&
     Object.keys(marketplaces).length > 0;
@@ -236,7 +254,16 @@ elif [ "$HAS_REMOTE_ENV" != "yes" ]; then
   REASON="gate-off:no-remote-environment"
 elif [ "$HAS_USED_REMOTE_SESSION" != "yes" ]; then
   REASON="gate-off:never-used-cloud-session"
+elif [ "$PLUGIN_DECLARED" != "yes" ]; then
+  # A VM installs plugins only from the repo's own .claude/settings.json. Without
+  # the declaration the leaf boots without the framework, which is a lost leaf
+  # rather than a degraded one — so this gates, it does not merely report.
+  REASON="plugin-not-declared"
 fi
+
+# base_pushed is deliberately NOT in this ladder: remote-dispatch.sh pushes the
+# base itself, so an unpushed base is a state this check would refuse for no
+# reason. It is printed because a caller dispatching by hand still needs it.
 
 REMOTE_AVAILABLE="no"
 [ "$REASON" = "ok" ] && REMOTE_AVAILABLE="yes"
