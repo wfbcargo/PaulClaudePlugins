@@ -11,14 +11,27 @@
     "claude-architect@paul-claude-plugins": true
   },
   "permissions": {
+    "deny": [
+      "Write(.claude/**)",
+      "Edit(.claude/**)",
+      "MultiEdit(.claude/**)",
+      "Write(.env*)",
+      "Edit(.env*)",
+      "MultiEdit(.env*)",
+      "Read(.env*)",
+      "Read(**/id_rsa)",
+      "Read(**/*.pem)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ],
     "allow": [
-      "Bash",
       "Read",
+      "Grep",
+      "Glob",
       "Write",
       "Edit",
       "MultiEdit",
-      "Grep",
-      "Glob"
+      "Bash"
     ]
   }
 }

@@ -83,7 +83,10 @@ git -C "$PARENT_WT" commit -q -m "$MESSAGE"
 
 if [ "$KEEP" != "--keep-worktree" ]; then
   if [ -n "$FROM_ORIGIN" ]; then
-    git push origin --delete "$BRANCH" >&2 || \
+    # `--delete refs/heads/<b>` rather than `--delete <b>`: the branch name is
+    # self-reported by the leaf and a leading `-` would otherwise be parsed as
+    # an option.
+    git push origin --delete "refs/heads/${BRANCH}" >&2 || \
       echo "warning: could not delete remote branch '${BRANCH}' — delete it by hand" >&2
   else
     CHILD_WT="$(wt_for "$BRANCH")"

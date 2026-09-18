@@ -69,11 +69,28 @@ guarantee of your final message — so the committed export log is the only
 channel your parent can rely on reading, and the receipt has to live inside
 it, not only at the end of a response that may never arrive.
 
-**Last action — commit, then push.** Once your work-log is written:
+**Your export log is PUBLISHED, unlike a local work-log.** `.work-log/` is
+gitignored precisely because it is local scratch that is never shared. Yours is
+committed to a branch on a remote, readable by anyone with repo access from the
+moment you push until the branch is deleted — and that deletion is best-effort.
+Write it accordingly: no credentials, no tokens, no environment values, no
+verbatim contents of files that are not already in the repository. A note you
+would not put in a commit message does not belong in it.
 
-    git add -A
+**Last action — stage what you touched, then push.** Stage by name; never
+`git add -A`. You run unattended on a VM that holds push credentials, so a
+blanket add commits whatever else is in the tree — an env file a setup script
+materialised, a credential a tool cached, a build artifact an incomplete
+`.gitignore` missed — and pushes it to a remote. Only `.work-log-export/` is
+stripped at squash; anything else you sweep in rides into the PR.
+
+    git add <the files your scope names> .work-log-export/<your-id>.md
+    git status --porcelain            # anything unexpected still listed?
     git commit -m "<summary of your phase>"
     git push -u origin <assigned-branch>
+
+If `git status --porcelain` still shows changes you did not make, do NOT stage
+them: name them in your receipt's `surprises` line and leave them behind.
 
 Do this regardless of status — `completed`, `escalated`, or `failed`. If you
 have no code changes (a pure escalation or failure), still commit and push

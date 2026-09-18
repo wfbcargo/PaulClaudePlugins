@@ -40,7 +40,10 @@ if [ "$FETCHED" = "yes" ]; then
   # against real content, not a stale cache. Non-fatal if it fails — a
   # standalone spec/epic base that was pushed once and never re-fetched
   # still has SOME ref to diff against.
-  git fetch origin "${PARENT}" >&2 || true
+  # refs/heads/ prefix, as above: a branch legitimately named `--upload-pack=x--y`
+  # passes `git check-ref-format`, and PARENT is derived from the leaf's own
+  # self-reported branch. Unprefixed it would reach git in option position.
+  git fetch origin "+refs/heads/${PARENT}:refs/remotes/origin/${PARENT}" >&2 || true
 
   if git rev-parse -q --verify "refs/remotes/origin/${PARENT}" >/dev/null; then
     BASE_REF="refs/remotes/origin/${PARENT}"

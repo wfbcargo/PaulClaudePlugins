@@ -48,10 +48,21 @@ touches only the VM, and only once per snapshot.
 bootstrap is specific to the project, not something a generic template should
 guess at.
 
-**The `permissions.allow` block applies locally too — decide before you commit
-it.** `.claude/settings.json` is read by every session in the repo, not only by
+**`deny` is the load-bearing half, and it is listed first deliberately.** `deny`
+beats `allow`, so the block refuses writes to `.claude/**` — the very file that
+grants these permissions, and the file this README tells you to add a
+`SessionStart` hook to — plus reads and writes of `.env*` and key material, and
+force-pushes. Without it, a leaf acting on a prompt it should not have trusted
+can widen its own permissions, and the change reaches every collaborator on
+merge. `allow` still lists bare `Bash`, which is allow-everything rather than
+"what a remote leaf needs": narrow it to command-scoped `Bash(<cmd>:*)` rules
+once you know which commands your project's leaves actually run. The `deny`
+entries are what make the broad `allow` survivable in the meantime.
+
+**The `permissions` block applies locally too — decide before you commit it.** `.claude/settings.json` is read by every session in the repo, not only by
 cloud ones, so allowing `Bash`, `Write` and `Edit` there means any Claude session
-a human opens in this project also runs those without prompting. There is no way
+a human opens in this project also runs those without prompting — and the `deny`
+entries equally constrain that human's session. There is no way
 to scope a permission rule in that file to cloud sessions only. The block is in
 the template because without it a remote leaf's first uncovered tool call puts
 its session in `requires_action` with no client to answer, and the leaf is simply
