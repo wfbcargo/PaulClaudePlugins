@@ -25,7 +25,12 @@ Non-obvious pitfalls. One entry per thing that bit us once.
   check `spawnedWithWorktree` in the subagent metadata, or run
   `scripts/remote-preflight.sh` first.
 
-- **`hasUsedRemoteSession` is per-project.** The cloud gate requires it set for
-  the specific project, and it is set only when a cloud session has been created
-  from that project. An account fully configured everywhere else still cannot
-  dispatch remotely from a repo that has never had one.
+- **Nothing a user can do sets `hasUsedRemoteSession` (Claude Code v2.1.275).**
+  The `isolation: remote` gate requires it true for the project, and the flag has
+  exactly one writer — whose only caller passes `{project:false, global:false}`.
+  `claude --cloud` creates a session through that caller and so does NOT set it;
+  this was verified by running it and diffing `~/.claude.json`, after the
+  opposite was assumed from reading the writer alone. An older build did pass
+  `global:true`, which is why `hasRemoteEnvironment` can be set while this flag
+  never is. Treat remote agents as a rollout gate you cannot open, and read a
+  flag-setter's call sites, not just the setter, before promising how to set it.

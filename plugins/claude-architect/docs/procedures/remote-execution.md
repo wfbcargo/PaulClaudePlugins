@@ -102,10 +102,12 @@ forbids.
 that hasn't cleared the gate (claude.ai auth, not already in a cloud session,
 `hasUsedRemoteSession` set for THIS project, `hasRemoteEnvironment` set
 globally, and a server-side feature flag) falls back to an ordinary local
-worktree without an error. `hasUsedRemoteSession` is per-project and is set only
-when a cloud session has been created from that project, so a repo that has
-never had one cannot dispatch remotely no matter how the account is configured.
-The server-side flag cannot be observed locally at all. **A
+worktree without an error. Neither flag can be opened by user action: as of
+Claude Code v2.1.275 nothing sets `hasUsedRemoteSession`, including creating a
+cloud session with `claude --cloud`, and the server-side flag cannot be observed
+locally at all. Treat `isolation: remote` as a rollout gate — when preflight
+reports `gate-off:remote-agents-not-enabled`, the fix is a newer Claude Code or
+an account-side rollout, not anything in this project. **A
 successful dispatch is therefore not proof of remote execution** — check
 `remote-preflight.sh`'s `remote_available=` before trusting that a leaf ran on
 a VM rather than next to you.

@@ -253,7 +253,11 @@ elif [[ "$ORIGIN" != *github.com* ]]; then
 elif [ "$HAS_REMOTE_ENV" != "yes" ]; then
   REASON="gate-off:no-remote-environment"
 elif [ "$HAS_USED_REMOTE_SESSION" != "yes" ]; then
-  REASON="gate-off:never-used-cloud-session"
+  # Named for what it means, not for the flag: the flag's only writer is called
+  # with {project:false}, so no user action sets it (verified on v2.1.275).
+  # The old name, gate-off:never-used-cloud-session, sent people off to create
+  # a cloud session — which does not help.
+  REASON="gate-off:remote-agents-not-enabled"
 elif [ "$PLUGIN_DECLARED" != "yes" ]; then
   # A VM installs plugins only from the repo's own .claude/settings.json. Without
   # the declaration the leaf boots without the framework, which is a lost leaf

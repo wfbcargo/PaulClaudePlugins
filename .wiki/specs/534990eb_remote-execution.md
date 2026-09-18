@@ -38,9 +38,16 @@ The gate requires ALL of: claude.ai auth; not already inside a cloud session;
 (global); and the server-side `tengu_neapolitan` feature flag.
 
 This account has `hasRemoteEnvironment: true` but `hasUsedRemoteSession` is unset
-across all 45 known projects — no cloud session has ever been created. Creating
-one cloud session from the project (`claude --cloud "..."`) sets the project
-flag; the server-side flag can only be observed after that.
+across all 45 known projects.
+
+**Correction (post-PR):** this section originally said creating a cloud session
+with `claude --cloud` would set the project flag. It does not. The flag's only
+writer is called from exactly one place, with `{project:false, global:false}`, so
+in v2.1.275 no user action sets it. Verified by creating a session from this repo
+and diffing `~/.claude.json` before and after: the file was rewritten, the flag
+was not added, and no backup has ever carried it. Remote agents are therefore a
+rollout gate on this build, not a setup step. Cloud *sessions* work on this
+account — only the Agent tool's `isolation: remote` integration is closed.
 
 **Consequence:** the transport, protocol, and policy are built and testable now;
 end-to-end verification waits on the gate. Fallback is safe — an ungated remote

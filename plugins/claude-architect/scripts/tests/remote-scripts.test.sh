@@ -84,13 +84,13 @@ is "T1.6 hasRemoteEnvironment absent -> gate-off:no-remote-environment" \
    "gate-off:no-remote-environment" "$(key "$OUT" reason)"
 
 OUT="$(pf "$(home_with h_nosess "{\"oauthAccount\":{\"a\":1},\"hasRemoteEnvironment\":true,\"projects\":{\"$RK\":{}}}")")"
-is "T1.7 hasUsedRemoteSession absent -> gate-off:never-used-cloud-session" \
-   "gate-off:never-used-cloud-session" "$(key "$OUT" reason)"
+is "T1.7 hasUsedRemoteSession absent -> gate-off:remote-agents-not-enabled" \
+   "gate-off:remote-agents-not-enabled" "$(key "$OUT" reason)"
 
 # project key must match THIS repo, not just any project in the file
 OUT="$(pf "$(home_with h_otherproj "{\"oauthAccount\":{\"a\":1},\"hasRemoteEnvironment\":true,\"projects\":{\"/some/other/repo\":{\"hasUsedRemoteSession\":true}}}")")"
 is "T1.8 hasUsedRemoteSession set for a DIFFERENT project -> gate-off" \
-   "gate-off:never-used-cloud-session" "$(key "$OUT" reason)"
+   "gate-off:remote-agents-not-enabled" "$(key "$OUT" reason)"
 
 git_q "$REPO" remote set-url origin "$TMP/elsewhere/origin.git"
 OUT="$(pf "$H_OK")"
