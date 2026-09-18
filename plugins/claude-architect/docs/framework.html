@@ -629,7 +629,7 @@ leaves AND someone has to referee their files</span>
   </section>
 
   <section>
-    <h2>The nine agents</h2>
+    <h2>The ten agents</h2>
     <div class="prose">
       <p>
         Each role carries two pins, both keyed to the role rather than to its depth in the tree. The
@@ -658,7 +658,7 @@ leaves AND someone has to referee their files</span>
         </p>
         <dl>
           <dt>Spawns</dt><dd class="grant">yes — the only one</dd>
-          <dt>Writes</dt><dd>code, wiki, work-log</dd>
+          <dt>Writes</dt><dd>code, work-log, and <span class="grant">the wiki — the only one</span></dd>
           <dt>Reports to</dt><dd>its spawning agent</dd>
         </dl>
       </article>
@@ -678,6 +678,26 @@ leaves AND someone has to referee their files</span>
           <dt>Spawns</dt><dd>no — terminal</dd>
           <dt>Writes</dt><dd>code in its assigned worktree</dd>
           <dt>Reports to</dt><dd>work-log, then exits</dd>
+        </dl>
+      </article>
+
+      <article class="agent">
+        <div class="agent-head">
+          <span class="agent-name">remote-implementation</span>
+          <span class="tier tier-bounded">bounded · medium</span>
+        </div>
+        <p>
+          The same leaf, dispatched onto an Anthropic-managed cloud VM instead of a local worktree —
+          opt-in, via <code>REMOTE_EXECUTION</code>, and only for this role. It shares no filesystem
+          with its orchestrator, so it commits its work-log to <code>.work-log-export/</code> on a
+          branch it pushes, and the orchestrator squashes that branch from the remote. It has no
+          parent to answer it mid-task either: there is no context pause, only a terminal status and
+          a fresh re-dispatch. Remote cannot nest, which is why leaves are the only role eligible.
+        </p>
+        <dl>
+          <dt>Spawns</dt><dd>no — terminal</dd>
+          <dt>Writes</dt><dd>code on its own pushed branch</dd>
+          <dt>Reports to</dt><dd>a committed export log, then exits</dd>
         </dl>
       </article>
 
@@ -872,6 +892,13 @@ leaves AND someone has to referee their files</span>
           is also read context, so it has a budget — a bloated wiki is a tax paid by every agent that
           reads it, and the default for any new entry is <em>omit</em>.
         </p>
+        <p>
+          Only the orchestrator writes it. A leaf that learns something durable emits a
+          <code>## Wiki proposals</code> section in its work-log and the orchestrator applies it,
+          allocating every decision number and rule id itself. The reason is concurrency, not
+          trust: parallel leaves cannot see each other's in-flight allocations, so two of them
+          pick the same number. One writer removes the race instead of detecting it afterwards.
+        </p>
       </div>
       <div class="pair">
         <span class="kicker">gitignored · ephemeral</span>
@@ -940,6 +967,9 @@ leaves AND someone has to referee their files</span>
           <tr><td class="knob">MAX_CONTEXT_REQUEST_DEPTH</td><td class="num">4</td><td class="why">Hops a context request may travel up before it becomes an escalation</td></tr>
           <tr><td class="knob">MAX_ORCHESTRATOR_DEPTH</td><td class="num">4</td><td class="why">Nested orchestrator levels, guard-banded under the runtime cap of 5</td></tr>
           <tr><td class="knob">MAX_CONTINUATIONS</td><td class="num">3</td><td class="why">Resumes of one unit before its decomposition is declared wrong</td></tr>
+          <tr><td class="knob">REMOTE_EXECUTION</td><td class="num">off</td><td class="why">off / leaf / subtree — whether leaves may run on a cloud VM instead of a local worktree</td></tr>
+          <tr><td class="knob">MAX_CONCURRENT_REMOTE_AGENTS</td><td class="num">6</td><td class="why">Remote leaves alive at once — bounded by the account's rate limit, not by this machine's disk</td></tr>
+          <tr><td class="knob">REMOTE_LEAF_TIMEOUT_MIN</td><td class="num">45</td><td class="why">Wait on a remote leaf before declaring it lost and re-dispatching</td></tr>
         </tbody>
       </table>
     </div>

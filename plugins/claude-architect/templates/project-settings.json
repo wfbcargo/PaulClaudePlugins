@@ -1,0 +1,37 @@
+{
+  "extraKnownMarketplaces": {
+    "paul-claude-plugins": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/wfbcargo/PaulClaudePlugins.git"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "claude-architect@paul-claude-plugins": true
+  },
+  "permissions": {
+    "deny": [
+      "Write(.claude/**)",
+      "Edit(.claude/**)",
+      "MultiEdit(.claude/**)",
+      "Write(.env*)",
+      "Edit(.env*)",
+      "MultiEdit(.env*)",
+      "Read(.env*)",
+      "Read(**/id_rsa)",
+      "Read(**/*.pem)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ],
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Write",
+      "Edit",
+      "MultiEdit",
+      "Bash"
+    ]
+  }
+}
