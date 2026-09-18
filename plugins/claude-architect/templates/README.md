@@ -50,11 +50,15 @@ it. Verify from a session with `node --version`.
 these permissions — or `scripts/cloud-install.sh`, which the SessionStart hook
 executes on every session start; nor read or write `.env*` and key material.
 Without that, a leaf acting on a prompt it should not have trusted can widen
-its own permissions or plant code in the hook, and the change reaches every
-collaborator on merge. File-write rules are `Edit(path)` only: Claude Code
+its own permissions or rewrite the hook, and the change reaches every
+collaborator on merge. The hook still runs whatever the dependency manifests
+install, lifecycle scripts included, so a manifest change is code too: review
+it on merge like one. File-write rules are `Edit(path)` only: Claude Code
 matches path rules for every file-editing tool through `Edit`, and warns that
-`Write(path)` and `MultiEdit(path)` rules match nothing. If you copy the hook
-script somewhere else, move its deny rule with it.
+`Write(path)` and `MultiEdit(path)` rules match nothing. The two repo paths
+are written `/…`, which anchors them at the session's working directory rather
+than wherever a later `cd` left it; if you copy the hook script somewhere
+else, move its deny rule with it.
 
 **`allow` grants no shell commands, on purpose.** A `Bash(<prefix>:*)` rule
 approves every flag after the prefix, and the git commands a leaf runs carry
@@ -76,7 +80,7 @@ ones: its `allow` rules skip prompts for a human's session too, and its `deny`
 rules bind that session as well. There is no way to scope a rule in that file to
 cloud sessions.
 
-**Claude cannot install these files for you, by design.** `Edit(.claude/**)`
+**Claude cannot install these files for you, by design.** `Edit(/.claude/**)`
 and the auto-mode classifier both refuse a session writing its own
 configuration. Stage the files outside `.claude/` and copy them in yourself,
 then commit and push — the preflight checks and the VM both read the committed

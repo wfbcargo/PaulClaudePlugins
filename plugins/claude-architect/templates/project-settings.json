@@ -26,8 +26,8 @@
   },
   "permissions": {
     "deny": [
-      "Edit(.claude/**)",
-      "Edit(scripts/cloud-install.sh)",
+      "Edit(/.claude/**)",
+      "Edit(/scripts/cloud-install.sh)",
       "Edit(.env*)",
       "Read(.env*)",
       "Read(**/id_rsa)",

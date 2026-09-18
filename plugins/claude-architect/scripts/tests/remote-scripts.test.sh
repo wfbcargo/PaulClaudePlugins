@@ -403,7 +403,7 @@ is "T4.5 parser=/project_key=/note go to stderr, not stdout" "0" "$OUT"
 PS="$DOCS/templates/project-settings.json"
 is "T4.6 no Write(path)/MultiEdit rules (only Edit(path) is matched)" "0" "$(grep -cE 'MultiEdit|"Write\(' "$PS")"
 is "T4.6 ... no Bash rule in allow" "0" "$(sed -n '/"allow"/,/]/p' "$PS" | grep -c 'Bash')"
-is "T4.6 ... the hook script is denied to the file tools" "1" "$(grep -c '"Edit(scripts/cloud-install.sh)"' "$PS")"
+is "T4.6 ... the hook script is denied to the file tools" "1" "$(grep -c '"Edit(/scripts/cloud-install.sh)"' "$PS")"
 is "T4.7 no doc points at the retired Settings -> Environments path" "" \
    "$(grep -rl --exclude-dir=tests 'Settings -> Environments' "$DOCS" --include='*.md' --include='*.sh' --include='*.json')"
 
