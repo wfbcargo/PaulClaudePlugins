@@ -33,8 +33,11 @@ information.
 
 1. **Preflight.** `scripts/remote-preflight.sh` prints `remote_available=`,
    `reason=`, `origin=`, `default_branch=`, `base_pushed=`, `plugin_declared=`,
-   `setup_script=`. `remote_available=no` → fall back to a local worktree and
-   record `reason=` in your work-log; do not retry remote for this unit.
+   `setup_script_committed=`, `github_app=`. `remote_available=no` → fall back
+   to a local worktree and record `reason=` in your work-log; do not retry
+   remote for this unit. `setup_script_committed=yes` says only that
+   `.claude/cloud-setup.sh` is in HEAD — the environment runs the text pasted
+   into its Setup script field, which nothing here can see.
 2. **Push the base.** A remote agent's base is the session's current branch
    *only if it is pushed* — else the repo default branch, silently. Before
    dispatch: `git push -u origin <base>`. Skipping this does not error; it
@@ -102,15 +105,35 @@ forbids.
 that hasn't cleared the gate (claude.ai auth, not already in a cloud session,
 `hasUsedRemoteSession` set for THIS project, `hasRemoteEnvironment` set
 globally, and a server-side feature flag) falls back to an ordinary local
-worktree without an error. Neither flag can be opened by user action: as of
-Claude Code v2.1.275 nothing sets `hasUsedRemoteSession`, including creating a
-cloud session with `claude --cloud`, and the server-side flag cannot be observed
-locally at all. Treat `isolation: remote` as a rollout gate — when preflight
-reports `gate-off:remote-agents-not-enabled`, the fix is a newer Claude Code or
-an account-side rollout, not anything in this project. **A
-successful dispatch is therefore not proof of remote execution** — check
-`remote-preflight.sh`'s `remote_available=` before trusting that a leaf ran on
-a VM rather than next to you.
+worktree without an error. **A successful dispatch is therefore not proof of
+remote execution** — check `remote-preflight.sh`'s `remote_available=` before
+trusting that a leaf ran on a VM rather than next to you.
+
+**The project flag is set by `claude --cloud`, conditionally (v2.1.276).**
+Creating a cloud session from the repo sets `hasUsedRemoteSession` for the
+project only when that session's GitHub check passes. The check asks
+Anthropic (`/api/oauth/organizations/<org>/code/repos/<owner>/<repo>`), not
+GitHub, whether the Claude GitHub App is installed on the repo. When Anthropic
+has no record — including when GitHub shows the App installed with access to
+the repo — the session still starts, from an uploaded bundle of the local repo
+instead of a clone, and the flag is silently never set. Run it once with
+`--debug` and read `~/.claude/debug/<session>.txt`:
+
+- `GitHub app is not installed on <owner>/<repo> (status is null)` followed by
+  `Bundling (reason: github_preflight_failed)` — the App is not linked to the
+  Claude account. Reconnect GitHub from claude.ai/code's repository picker;
+  if a fresh `--debug` run still logs `status is null`, only Anthropic support
+  can repair the link. Preflight reports this as `github_app=not-linked` and
+  `reason=gate-off:github-app-not-linked`.
+- `GitHub app is installed on <owner>/<repo>` and no `Bundling` line — the
+  check passed and the flag should now be set. If preflight still reports
+  `gate-off:remote-agents-not-enabled`, what remains is the server-side flag,
+  which cannot be observed locally: treat it as a rollout gate.
+
+v2.1.275 was read as never setting the flag; that observation is equally
+explained by the check failing, and the conditional writer was not verified
+end-to-end on 2.1.276 either, because the check never passed on the test
+account.
 
 **The base-branch rule fails silently too.** There is no per-agent base
 parameter. If the base isn't pushed when the leaf starts, it bases itself on the

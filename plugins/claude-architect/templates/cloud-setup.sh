@@ -1,71 +1,70 @@
 #!/usr/bin/env bash
-# Cloud-environment setup script — the remote analogue of scripts/worktree-setup.sh.
+# Cloud-environment setup script: provisions the VM's TOOLCHAIN, nothing else.
 #
-# Commit this file to the repo at .claude/cloud-setup.sh — that committed copy
-# is the version-controlled source of truth (reviewable and diffable like any
-# other script) and is also what scripts/remote-preflight.sh checks for when it
-# reports setup_script=. Committing it is NOT enough to run it: claude.ai/code
-# never reads or executes a file from the repo for this purpose. Paste the same
-# body into the "Setup script" field of the environment dialog at
-# claude.ai/code (Settings -> Environments, or when creating one) — that pasted
-# copy is what actually executes. Keep the two in sync by hand; nothing
-# enforces that they match. Claude Code runs the pasted script once, before the
-# session's Claude Code process starts, then snapshots the filesystem. Every
-# session dispatched into that environment for roughly the next seven days reuses
-# the snapshot instead of re-running this script — so what it installs is what
-# every remote leaf gets, and it is paid for once, not per leaf.
+# Commit this file at .claude/cloud-setup.sh — that copy is the reviewable
+# source of truth and what scripts/remote-preflight.sh reports as
+# setup_script_committed=. Committing it does NOT run it: only the body pasted
+# into the environment's "Setup script" field executes (claude.ai/code or the
+# Desktop Code tab -> environment dropdown above the message box -> gear icon
+# on the environment). Keep the two in sync by hand; nothing checks that they
+# match.
 #
-# Budget: this step must finish in about five minutes. A toolchain that takes
-# longer belongs in a prebuilt base image, if your environment lets you choose
-# one, not in this script.
+# Three facts shape everything below:
+#   - It runs BEFORE Claude Code launches, and NOT in the repo: the working
+#     directory has no checkout, so `npm ci` here fails EUSAGE even with a
+#     committed lockfile. Project dependencies belong in templates/cloud-install.sh,
+#     run from a SessionStart hook that gets $CLAUDE_PROJECT_DIR.
+#   - A non-zero exit stops the session from starting, and an environment is
+#     account-wide, not per repo — a failure here blocks every repo that uses
+#     it. So no `set -e`, and every step degrades instead of failing. Prefer one
+#     environment per repo.
+#   - It runs once, then the filesystem is snapshotted and reused by every
+#     session in that environment for about seven days. Files survive; running
+#     processes do not. Keep it under about five minutes.
 #
-# What the snapshot keeps and what it doesn't:
-#   - Files on disk: YES — node_modules, .venv, downloaded models, build caches.
-#   - Running processes, open ports, background daemons: NO — anything started
-#     here is gone by the time a session resumes the snapshot. A dev server or
-#     watcher that must be running at session start belongs in a SessionStart
-#     hook in the repo's .claude/settings.json instead (see
-#     project-settings.json and this directory's README) — that hook
-#     runs on every session, local and cloud, whereas this script runs once per
-#     snapshot and only on the VM.
-#
-# Detect, don't assume: a fresh environment has no foreknowledge of this
-# project's toolchain, so each block below checks for its own manifest file
-# before reaching for an installer. Delete whichever blocks don't apply here,
-# and add your own — this script exists to show the shape, not to guess your
-# stack.
+# The VM ships Node 20/21/22 (22 on PATH), Python, and common package managers;
+# ask a cloud session to run `check-tools` for the exact list. Add a block only
+# for a toolchain that is missing or the wrong version.
 
-set -euo pipefail
+set -uo pipefail
 
-echo "== cloud-setup starting: $(date -u +%FT%TZ) =="
+# --- Node at a pinned version, installed beside the VM's own ----------------
+# Set to the version local development runs (e.g. 24.18.0); empty skips this.
+# Installs to /opt/node<major> without touching PATH, so other repos in this
+# environment keep the default. cloud-install.sh puts it first on PATH for
+# this repo's sessions, via CLAUDE_ENV_FILE.
+NODE_VERSION=""
 
-if [ -f package.json ]; then
-  echo "-- node project detected"
-  if [ -f package-lock.json ] && command -v npm >/dev/null 2>&1; then
-    npm ci --prefer-offline --no-audit --no-fund
-  elif command -v npm >/dev/null 2>&1; then
-    npm install --no-audit --no-fund
+if [ -n "$NODE_VERSION" ]; then
+  node_dir="/opt/node${NODE_VERSION%%.*}"
+  case "$(uname -m)" in
+    x86_64) arch=x64 ;;
+    aarch64) arch=arm64 ;;
+    *) arch="" ;;
+  esac
+  if [ -z "$arch" ]; then
+    echo "cloud-setup: unknown arch $(uname -m); skipping Node $NODE_VERSION"
+  elif [ ! -x "$node_dir/bin/node" ]; then
+    # Verified against the release's SHASUMS256.txt before anything is
+    # extracted: this runs as root and its output is every session's `node`.
+    dist="https://nodejs.org/dist/v${NODE_VERSION}"
+    tarball="node-v${NODE_VERSION}-linux-${arch}.tar.xz"
+    dl="$(mktemp -d)"
+    if curl -fsSL -o "$dl/$tarball" "$dist/$tarball" \
+       && curl -fsSL -o "$dl/SHASUMS256.txt" "$dist/SHASUMS256.txt" \
+       && (cd "$dl" && grep " $tarball\$" SHASUMS256.txt | sha256sum -c - >/dev/null 2>&1); then
+      mkdir -p "$node_dir" && tar -xJf "$dl/$tarball" -C "$node_dir" --strip-components=1 \
+        || { echo "cloud-setup: Node $NODE_VERSION did not extract; sessions fall back to the VM default"; rm -rf "$node_dir"; }
+    else
+      echo "cloud-setup: Node $NODE_VERSION download or checksum failed; sessions fall back to the VM default"
+    fi
+    rm -rf "$dl"
   fi
+  "$node_dir/bin/node" --version 2>/dev/null || true
 fi
 
-if [ -f requirements.txt ]; then
-  echo "-- python project detected (requirements.txt)"
-  command -v pip >/dev/null 2>&1 && pip install -r requirements.txt
-fi
+# --- apt packages the base image lacks --------------------------------------
+# Runs as root on Ubuntu 24.04. Example: apt-get install -y shellcheck
+# apt-get update -qq && apt-get install -y -qq <package> || true
 
-if [ -f pyproject.toml ] && [ ! -f requirements.txt ]; then
-  echo "-- python project detected (pyproject.toml)"
-  command -v pip >/dev/null 2>&1 && pip install -e .
-fi
-
-if [ -f Gemfile ]; then
-  echo "-- ruby project detected"
-  command -v bundle >/dev/null 2>&1 && bundle install
-fi
-
-if [ -f go.mod ]; then
-  echo "-- go project detected"
-  command -v go >/dev/null 2>&1 && go mod download
-fi
-
-echo "== cloud-setup done: $(date -u +%FT%TZ) =="
+exit 0

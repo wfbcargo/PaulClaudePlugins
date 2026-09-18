@@ -10,14 +10,25 @@
   "enabledPlugins": {
     "claude-architect@paul-claude-plugins": true
   },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/scripts/cloud-install.sh",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "deny": [
-      "Write(.claude/**)",
-      "Edit(.claude/**)",
-      "MultiEdit(.claude/**)",
-      "Write(.env*)",
+      "Edit(/.claude/**)",
+      "Edit(/scripts/cloud-install.sh)",
       "Edit(.env*)",
-      "MultiEdit(.env*)",
       "Read(.env*)",
       "Read(**/id_rsa)",
       "Read(**/*.pem)",
@@ -29,9 +40,7 @@
       "Grep",
       "Glob",
       "Write",
-      "Edit",
-      "MultiEdit",
-      "Bash"
+      "Edit"
     ]
   }
 }

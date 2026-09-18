@@ -129,7 +129,7 @@ re-dispatches with the answer appended.
 
 | Script | Prints |
 |---|---|
-| `remote-preflight.sh` | `remote_available=`, `reason=`, `origin=`, `default_branch=`, `base_pushed=`, `plugin_declared=`, `setup_script=` |
+| `remote-preflight.sh` | `remote_available=`, `reason=`, `origin=`, `default_branch=`, `base_pushed=`, `plugin_declared=`, `setup_script_committed=`, `github_app=` (the last two since b3fb59c2, which renamed `setup_script=`) |
 | `remote-dispatch.sh <tier> <slug> <parent>` | `base=`, `branch=`, `unit_id=`, `export_dir=` (a directory — no agent id exists yet) |
 | `remote-collect.sh <branch>` | `fetched=`, `export_log=`, `commits=`, `status=` |
 | `squash-up.sh <branch> <msg> [--from-origin] [--keep-worktree]` | `merged=`, `into=`, `parent_worktree=`; or `merged=none`, `status=empty-after-strip` with exit 3 |

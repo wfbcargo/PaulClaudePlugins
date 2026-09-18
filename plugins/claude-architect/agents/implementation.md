@@ -88,6 +88,14 @@ need context that should exist higher in the tree but isn't in your spawn prompt
 write status `paused_for_context` with a `## Context I need` section, then exit —
 never read grandparent work-logs.
 
+**A pass comes from an exit code, never from output you read.** A receipt
+saying tests or a typecheck pass is the claim your parent merges on. Capture
+the command's own exit status — `cmd >log 2>&1; echo "exit=$?"` — and report
+that. Piping into `tail`, `head` or `grep` replaces the exit status with the
+filter's and cuts off every failure above the window: a truncated tail of a
+workspace-wide run once read as "all 12 packages clean" on a repo with 21. If
+you only saw part of the output, say which part.
+
 **Work log.** On completion write `.work-log/agents/<your-id>.md` per the WORK LOG
 format in ORCHESTRATION.md (frontmatter: `agent_id`, `role`, `status`,
 `wiki_proposals`; then What I did / What changed / optional What the next agent needs

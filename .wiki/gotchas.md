@@ -25,12 +25,21 @@ Non-obvious pitfalls. One entry per thing that bit us once.
   check `spawnedWithWorktree` in the subagent metadata, or run
   `scripts/remote-preflight.sh` first.
 
-- **Nothing a user can do sets `hasUsedRemoteSession` (Claude Code v2.1.275).**
-  The `isolation: remote` gate requires it true for the project, and the flag has
-  exactly one writer — whose only caller passes `{project:false, global:false}`.
-  `claude --cloud` creates a session through that caller and so does NOT set it;
-  this was verified by running it and diffing `~/.claude.json`, after the
-  opposite was assumed from reading the writer alone. An older build did pass
-  `global:true`, which is why `hasRemoteEnvironment` can be set while this flag
-  never is. Treat remote agents as a rollout gate you cannot open, and read a
-  flag-setter's call sites, not just the setter, before promising how to set it.
+- **`hasUsedRemoteSession` is set by `claude --cloud` only when the GitHub App
+  check passes (v2.1.276).** The flag's writer has two callers: one passes
+  `{project:false}`, and the `--cloud` creation path passes
+  `{project: repoDetected && preflight !== "github_preflight_failed"}`. That
+  check asks Anthropic, not GitHub, and an App installed on GitHub but unlinked
+  on Anthropic's side fails it silently: the session runs from an uploaded
+  bundle and the flag never lands. v2.1.275 was concluded to have "no user
+  action sets it" from a `--cloud` run that, by the same mechanism, most likely
+  just failed the check. Read every call site AND the condition on its
+  arguments, and confirm the branch taken with `--debug`, before promising how
+  a flag gets set.
+
+- **A cloud environment's setup script runs outside the repo.** It runs before
+  Claude Code launches with no checkout in its working directory, so
+  `npm ci` there fails `EUSAGE` despite a committed lockfile; and it is
+  account-wide, so a non-zero exit blocks every repo using the environment.
+  Project dependencies go in a SessionStart hook (`$CLAUDE_PROJECT_DIR`), which
+  is what `templates/cloud-install.sh` is.

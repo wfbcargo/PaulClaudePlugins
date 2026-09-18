@@ -46,10 +46,59 @@ fi
 
 # Read the COMMITTED tree, not the working tree: the VM clones what got
 # pushed, not what's sitting uncommitted in this checkout (see plugin_declared
-# below for the same reasoning; a project's setup script is version-controlled
-# at this path and pasted into the cloud environment dialog from there).
-SETUP_SCRIPT="no"
-git -C "$INVOKE_DIR" cat-file -e HEAD:.claude/cloud-setup.sh 2>/dev/null && SETUP_SCRIPT="yes"
+# below for the same reasoning). Named for what this can see: the environment
+# executes only the text pasted into its Setup script field, which is not
+# observable from here, and a committed file says nothing about whether that
+# field matches it.
+SETUP_SCRIPT_COMMITTED="no"
+git -C "$INVOKE_DIR" cat-file -e HEAD:.claude/cloud-setup.sh 2>/dev/null && SETUP_SCRIPT_COMMITTED="yes"
+
+# ---------------------------------------------------------------------------
+# github_app — whether Anthropic has the Claude GitHub App linked to this repo.
+# `claude --cloud` asks Anthropic (not GitHub) at session creation and sets the
+# project's hasUsedRemoteSession only when the answer is yes; otherwise it
+# silently uploads a bundle instead of cloning. The answer is not stored
+# anywhere, but `--debug` logs it, so read the newest debug log that checked
+# this repo. `unknown` means no such log: run `claude --cloud "<task>" --debug`
+# once. A log older than a fix to the App link keeps saying not-linked until
+# the next --debug run — the key reports evidence, not live state.
+# ---------------------------------------------------------------------------
+github_repo_of() { # origin URL -> owner/repo, or empty
+  local path="${1#*github.com}"
+  path="${path#[:/]}"; path="${path%/}"; path="${path%.git}"
+  case "$path" in */*/*|/*|"") return ;; */*) printf '%s' "$path" ;; esac
+}
+
+lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; } # bash 3.2 has no ${v,,}
+
+# Prints linked / not-linked for the LAST verdict line in file $1 that names
+# repo $2 exactly (so acme/widget never matches a line about acme/widget-v2),
+# or nothing when the file never checked that repo.
+github_app_verdict_in() {
+  local want line rest verdict=""
+  want="installed on $(lower "$2")"
+  while IFS= read -r line; do
+    line="$(lower "${line%$'\r'}")"
+    rest="${line#*"$want"}"
+    [ -z "$rest" ] || [ "${rest:0:1}" = " " ] || continue
+    case "$line" in
+      *"github app is not installed"*) verdict="not-linked" ;;
+      *"github app is installed"*) verdict="linked" ;;
+    esac
+  done < <(grep -iF "$want" "$1" 2>/dev/null)
+  printf '%s' "$verdict"
+}
+
+GITHUB_APP="unknown"
+GITHUB_REPO="$(github_repo_of "$ORIGIN")"
+DEBUG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/debug"
+if [ -n "$GITHUB_REPO" ] && [ -d "$DEBUG_DIR" ]; then
+  # Newest log first; the first one that checked this repo decides.
+  while IFS= read -r f; do
+    v="$(github_app_verdict_in "$f" "$GITHUB_REPO")"
+    if [ -n "$v" ]; then GITHUB_APP="$v"; break; fi
+  done < <(ls -t "$DEBUG_DIR"/*.txt 2>/dev/null)
+fi
 
 # ---------------------------------------------------------------------------
 # ~/.claude.json + .claude/settings.json — need a JSON parser. Try python3,
@@ -252,11 +301,17 @@ elif [[ "$ORIGIN" != *github.com* ]]; then
   REASON="origin-not-github"
 elif [ "$HAS_REMOTE_ENV" != "yes" ]; then
   REASON="gate-off:no-remote-environment"
+elif [ "$HAS_USED_REMOTE_SESSION" != "yes" ] && [ "$GITHUB_APP" = "not-linked" ]; then
+  # The flag's writer runs on `claude --cloud` session creation and sets it for
+  # the project only when Anthropic reports the GitHub App installed on the
+  # repo (2.1.276). A logged "not installed" is the concrete reason the flag
+  # is missing, and the fix is on the account side — so say that, not the
+  # generic gate below.
+  REASON="gate-off:github-app-not-linked"
 elif [ "$HAS_USED_REMOTE_SESSION" != "yes" ]; then
-  # Named for what it means, not for the flag: the flag's only writer is called
-  # with {project:false}, so no user action sets it (verified on v2.1.275).
-  # The old name, gate-off:never-used-cloud-session, sent people off to create
-  # a cloud session — which does not help.
+  # Named for what it means, not for the flag. Reached when the App check has
+  # not been observed (github_app=unknown: run `claude --cloud ... --debug`),
+  # or passed and the flag is still unset — which leaves the server-side gate.
   REASON="gate-off:remote-agents-not-enabled"
 elif [ "$PLUGIN_DECLARED" != "yes" ]; then
   # A VM installs plugins only from the repo's own .claude/settings.json. Without
@@ -285,6 +340,7 @@ echo "origin=${ORIGIN:-none}"
 echo "default_branch=${DEFAULT_BRANCH}"
 echo "base_pushed=${BASE_PUSHED}"
 echo "plugin_declared=${PLUGIN_DECLARED}"
-echo "setup_script=${SETUP_SCRIPT}"
+echo "setup_script_committed=${SETUP_SCRIPT_COMMITTED}"
+echo "github_app=${GITHUB_APP}"
 
 exit 0
