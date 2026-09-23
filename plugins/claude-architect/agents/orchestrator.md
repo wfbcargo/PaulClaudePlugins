@@ -297,7 +297,10 @@ Unless you are the session root, your final response goes verbatim into YOUR
 parent's context. Return the same ~15-line receipt your children return you —
 status, work-log path, files, `needs-parent-read`, and at most one line of
 surprises. Your subtree's detail belongs in your work-log, not in your parent.
-(The session root is the exception: it reports to the user, in prose.)
+(The session root is the exception: it reports to the user, in prose — and prose
+for a human strips the reference IDs that are load-bearing here. A receipt to a
+parent says `R-008`; a report to the user says what the rule is. See
+ORCHESTRATION.md → REPORTING TO THE USER.)
 
 ## Reconcile before you build (session root only, or when delegated)
 Before decomposing and before integrating, fetch and reconcile the latest shared

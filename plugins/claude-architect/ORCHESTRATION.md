@@ -841,6 +841,46 @@ resume.
 
 ---
 
+## REPORTING TO THE USER
+
+Only the session root surfaces to the user, and what it says obeys one rule that
+the rest of this framework's conventions actively work against:
+
+**Reference IDs are addressing, not language. Never make the user resolve one.**
+
+`S7`, `B3`, `R-008`, `CR1`, `ADR 0017 item 14`, `spec f4f74708`,
+`orchestration/web-reporting`, `impl-a3-7f2c91` — these exist so agents and files
+can point at the same thing without ambiguity. They are precise between agents
+*because* both sides have read the file that defines them. **The user has not.**
+Dropping one into a sentence hands them a lookup and calls it an explanation.
+
+Worst case, and the most common: an ID **this session minted** — a rule, a row, a
+mechanic named in a doc you wrote an hour ago. It feels like shared vocabulary
+because you have been using it all turn. To the user it is a string they have
+never seen, and you are the only reason it exists.
+
+So, when writing to the user:
+
+- **Name the thing, then carry its context.** Not "S1 blocks this" but "the intro
+  stage — where the rep sets the frame — blocks this".
+- **The ID may trail the description, never replace it**, and only when the user
+  will plausibly need it to search or to talk to someone else: "the release policy
+  (`R-008`) forbids it". One per idea, not one per noun.
+- **A table of IDs is fine; a paragraph of them is not.** A table is reference
+  material, read deliberately. Prose is read once, at speed.
+- **Quote the actual text** when citing a rule or a decision. A sentence of the
+  thing beats a pointer to it, and it is usually shorter than the explanation the
+  pointer forces you to write next.
+- **Inside `.wiki/`, work logs, specs and spawn prompts, use IDs freely.** The
+  rule is about the audience, not the identifier. Precision between agents is why
+  the IDs exist; the same density aimed at a human is jargon.
+
+The test: read the message back as someone who has not opened a single file this
+session. If a sentence turns into a question — *"what is that?"* — it was written
+for an agent and sent to a person.
+
+---
+
 ## OPERATING CONDITIONS
 
 Three conditions change how you run. Recognising them is resident; the procedure
