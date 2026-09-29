@@ -5,7 +5,7 @@ description: >
   dedicated --additional/merge-target-aN worktree, merges origin/<target>,
   resolves conflicts preserving BOTH sides' intent (no wholesale ours/theirs),
   uses real merge commits (not squash) for auditability.
-model: claude-opus-5
+model: claude-opus-5-5
 effort: medium
 # Semantic conflict resolution is bounded but its failure mode is SILENT — a
 # mangled merge that still compiles and passes tests. Low-volume, so it stays on
@@ -26,7 +26,9 @@ status `escalated` (to your spawning agent) and exit. On completion write
 
 **Return payload — a receipt, not a report.** Your final response is copied
 verbatim into your parent's context: return status, work-log path, the conflicted
-paths, `needs-parent-read`, and at most one line of surprises. ~15 lines, no
+paths, `needs-parent-read`, at most one line of surprises, and at most one line
+of `decisions` (which side's intent you chose where the two could not both be
+kept). ~15 lines, no
 diffs, no conflict hunks. Set `needs-parent-read: yes` when a resolution required
 a judgment call about intent, or tests only passed after a non-obvious change.
 

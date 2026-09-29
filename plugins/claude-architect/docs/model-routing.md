@@ -8,13 +8,13 @@ of the spend in a run is decided by the second dial on the highest-volume role.
 
 | Role | Model | Effort | Why |
 |------|-------|--------|-----|
-| Orchestrator — session root AND recursive children | `claude-opus-5` | `high` | Long-horizon team manager. A bad decomposition wastes a whole subtree of leaf work, so planning tokens here are the cheapest tokens in the run. Never drop this to medium. |
-| Architecture-integrity auditor | `claude-opus-5` | `high` | The drift gate — largest blast radius in the pipeline. Cheap because it is boundary-triggered, not per-iteration; that is what buys it top model *and* high effort. |
-| Review Agent (per dimension) | `claude-opus-5` | `medium` | Bounded reasoning, but a missed bug is a **silent** failure that passes the gate. Low-volume (per top-level unit), so the model barely moves the bill — effort is the dial. Note the *count* is now the cost lever, not the tier: gate the extra dimensions on the diff and this row stays cheap; spawn all four every merge and you have quadrupled it. |
-| Test-integrity auditor | `claude-opus-5` | `medium` | Same silent-failure shape as review, one step further out: a vacuous test suite passes review, spec-audit and CI alike. Low-volume and precondition-gated, so the top tier is affordable. |
-| Merge sub-agent | `claude-opus-5` | `medium` | Same shape: bounded, low-volume, and its failure mode is silent — a mangled merge that still compiles. |
-| Spec-adherence auditor | `claude-sonnet-5` | `medium` | Bounded and *checkable*: this change vs this spec's stated intent. A wrong answer surfaces as a disputed finding, not a silent pass. |
-| Implementation / fix (leaf) | `claude-sonnet-5` | `medium` | Narrow, well-scoped, **highest volume** (up to `MAX_CONCURRENT_AGENTS`). Dominates spend, so this is the only row where the dials really move the bill. |
+| Orchestrator — session root AND recursive children | `claude-opus-5-5` | `high` | Long-horizon team manager. A bad decomposition wastes a whole subtree of leaf work, so planning tokens here are the cheapest tokens in the run. Never drop this to medium. |
+| Architecture-integrity auditor | `claude-opus-5-5` | `high` | The drift gate — largest blast radius in the pipeline. Cheap because it is boundary-triggered, not per-iteration; that is what buys it top model *and* high effort. |
+| Review Agent (per dimension) | `claude-opus-5-5` | `medium` | Bounded reasoning, but a missed bug is a **silent** failure that passes the gate. Low-volume (per top-level unit), so the model barely moves the bill — effort is the dial. Note the *count* is now the cost lever, not the tier: gate the extra dimensions on the diff and this row stays cheap; spawn all four every merge and you have quadrupled it. |
+| Test-integrity auditor | `claude-opus-5-5` | `medium` | Same silent-failure shape as review, one step further out: a vacuous test suite passes review, spec-audit and CI alike. Low-volume and precondition-gated, so the top tier is affordable. |
+| Merge sub-agent | `claude-opus-5-5` | `medium` | Same shape: bounded, low-volume, and its failure mode is silent — a mangled merge that still compiles. |
+| Spec-adherence auditor | `claude-sonnet-5-5` | `medium` | Bounded and *checkable*: this change vs this spec's stated intent. A wrong answer surfaces as a disputed finding, not a silent pass. |
+| Implementation / fix (leaf) | `claude-sonnet-5-5` | `medium` | Narrow, well-scoped, **highest volume** (up to `MAX_CONCURRENT_AGENTS`). Dominates spend, so this is the only row where the dials really move the bill. |
 | state-doctor | `claude-haiku-4-5` | `low` | Read-only checklist diagnostics. Proposes; never executes. |
 
 The split axis for **model** is *whether a mistake is silent*: orchestration and
@@ -41,9 +41,9 @@ iterations catching.
 If review iterations climb after adopting these defaults, raise the leaf rows
 (model first, then effort) rather than raising everything.
 
-## When to reach for `claude-fable-5`
+## When to reach for `claude-fable-5-1`
 
-Fable is roughly **2x** the per-token price of Opus 5, and orchestrators are the
+Fable 5.1 is roughly **2.5x** the per-token price of Opus 5.5 ($10/$50 vs $4/$20 per MTok), and orchestrators are the
 longest-lived, largest-context sessions in the framework — so it is an opt-in,
 not a default. Use it for the orchestrator (and only the orchestrator) when:
 
@@ -53,7 +53,7 @@ not a default. Use it for the orchestrator (and only the orchestrator) when:
   before anyone notices.
 
 Set it on the *session root only* (via `.claude/settings.json`) and leave the
-recursive children on Opus 5, unless the whole subtree is that hard. Fable
+recursive children on Opus 5.5, unless the whole subtree is that hard. Fable
 requires 30-day data retention and is unavailable to zero-data-retention orgs.
 
 ## How the routing resolves

@@ -6,7 +6,7 @@ description: >
   report, and write access to the files those findings name. Edits in the
   top-level worktree and does NOT commit — the orchestrator commits the batch.
   Mechanical, bounded fixes.
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 effort: medium
 # Mechanical, bounded, and high-volume during the review loop. The findings it
 # applies are already diagnosed — this agent executes them, it does not re-derive
@@ -83,9 +83,11 @@ findings: <IDs fixed> | <IDs not fixed, if any>
 files: <paths touched>
 needs-parent-read: no
 surprises: <blank, or ONE line the diff cannot show>
+decisions: <blank, or ONE line: choices your spawn prompt did not dictate that a sibling or your parent must match>
 ```
 
-Set `needs-parent-read: yes` for any finding you could not fix mechanically, any
+Set `needs-parent-read: yes` for a non-empty `decisions` line, any finding you
+could not fix mechanically, any
 finding that turned out to need a design decision, or anything invisible in the
 diff. Any non-`completed` status implies `yes`.
 

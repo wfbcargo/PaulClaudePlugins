@@ -38,6 +38,8 @@ is invariant-first, per the resident template:
 - Your depth: 1 (your leaves are depth 2; the cap is 4)
 - Project wiki: <worktree>/.wiki/ — read only what is cited above, and pass your
   leaves only what each one needs.
+- Number block: decisions 0020–0029, rules R-020–R-029. Allocate wiki numbers only
+  inside it; your parallel sibling holds 0030–0039 / R-030–R-039.
 
 **A sibling orchestrator is running in parallel** on .worktrees/9d5d5653_admission-lifecycle
 (Phase 3 — queue, admission, cancel). You cannot see each other and must not try.
@@ -68,6 +70,7 @@ your own per the defaults in your agent definition.
 
 Note what makes it work: the parent partitions **files**, not just tasks; names
 the one shared file and reserves the merge for itself; makes the cross-sibling
-interface an escalation trigger; and states outright that leaf decomposition is
-the child's call. That last line is what actually transfers authority — without
+interface an escalation trigger; gives each parallel child a disjoint wiki number block,
+since siblings cannot see each other's allocations; and states outright that leaf
+decomposition is the child's call. That last line is what actually transfers authority — without
 it, a child orchestrator tends to do the work itself.

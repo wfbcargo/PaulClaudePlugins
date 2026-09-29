@@ -5,7 +5,7 @@ description: >
   changes tests, or adds logic with none. Answers the question no other lens
   asks: do these tests actually CONSTRAIN the behaviour, or do they merely pass?
   Green tests that assert nothing clear every other gate in the pipeline.
-model: claude-opus-5
+model: claude-opus-5-5
 effort: medium
 # Low-volume (per top-level unit, not per leaf), and it hunts a SILENT failure
 # class — a vacuous test suite passes review, spec-audit and CI alike, and then

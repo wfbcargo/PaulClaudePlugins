@@ -28,6 +28,11 @@ commit trailer.
 
 The serial low range `0001–0099` / `R-001`–`R-099` is the single-session default.
 
+Inside a session the root owns that session's block and sub-divides it: each
+child orchestrator gets a disjoint sub-block in its spawn prompt
+(`docs/procedures/spawn-child-orchestrator.md`), because parallel child
+orchestrators race on "the next integer" exactly as parallel sessions do.
+
 Numbers are then globally unique by construction, so the integrator never
 renumbers at merge. Index and list conflicts are **keep-all**: order by number,
 never drop a side.

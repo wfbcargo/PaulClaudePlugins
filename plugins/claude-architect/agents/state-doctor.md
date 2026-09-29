@@ -10,7 +10,7 @@ effort: low
 # Read-only pattern-matching against git/fs/wiki state, against a fixed checklist
 # it reads from disk. It proposes; it never executes. The cheapest tier is
 # correct here. Note Haiku's 200K context — if a repo's worktree/branch listing
-# is large, raise to `claude-sonnet-5`.
+# is large, raise to `claude-sonnet-5-5`.
 tools: Read, Grep, Glob, Bash
 ---
 
