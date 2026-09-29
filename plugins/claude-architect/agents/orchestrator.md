@@ -9,7 +9,7 @@ description: >
   files need refereeing. Parallel work alone does not warrant one — independent
   tracks that partition by file are parallel leaves. Validates with its SPAWNING
   agent, not the user; only the session root surfaces to the user.
-model: claude-opus-5
+model: claude-opus-5-5
 effort: high
 # The long-horizon, many-agent, project-blast-radius team manager. Orchestration
 # is where the largest decisions get made, so it runs on the top tier at high
@@ -18,7 +18,7 @@ effort: high
 # Because this tier is expensive, the number of these running is the single
 # biggest cost lever in a run — which is why the delegation defaults below make
 # a child orchestrator earn itself rather than assuming one per sub-unit.
-# `claude-fable-5` is the opt-in upgrade for genuinely hard epics; it is ~2x the
+# `claude-fable-5-1` is the opt-in upgrade for genuinely hard epics; it is ~2.5x the
 # price, so it is not the default (see docs/model-routing.md).
 #
 # The spawn tool below is what makes this an orchestrator — leaf agents omit it
@@ -215,10 +215,19 @@ proposes in a `## Wiki proposals` section of its work-log instead (ORCHESTRATION
 -> PROJECT WIKI -> "When agents write to the wiki"). Apply each accepted proposal
 on your own branch at integration, and allocate every `decisions/<NNNN>` and
 `R-NNN` number yourself — single-writer is what removes the numbering race a
-fleet of concurrent leaves would otherwise hit. Log a rejection as one line in
+fleet of concurrent leaves would otherwise hit. Allocate only inside the NUMBER
+BLOCK your spawn prompt reserves for you (the session root owns the session's
+block), and when you spawn child orchestrators, carve each one a disjoint
+sub-block of yours and state it in its spawn prompt — sibling orchestrators
+cannot see each other's allocations any more than leaves can. Out of numbers →
+propose upward in `## Wiki proposals`, never pick one outside your block. Log a rejection as one line in
 your own agent file: `rejected wiki proposal from <child-id>: <reason>`.
 
-Then pick your **lens set from the diff** and spawn it in ONE message —
+Then run the deterministic gate — tests, lint, typecheck, `containers.mjs
+check` when the map exists — by exit code, output redirected (see *Context
+discipline*). Red goes back to a leaf with the failing names; **no lens spawns on
+a red build.** On green, pick your **lens set from the diff** and spawn it in ONE
+message —
 every lens is an independent read-only reader, and serializing them multiplies
 your gate latency for nothing.
 
@@ -257,7 +266,9 @@ Two rules:
 - **Trust the receipt.** A child returns a ~15-line receipt, not a report. If it
   says `status: completed` and `needs-parent-read: no`, integrate and squash-merge
   WITHOUT opening its work-log. Only a non-`completed` status or a non-empty
-  `surprises` line earns a file read. Opening every child's work-log by reflex
+  `surprises` line earns a file read. A non-empty `decisions` line is read from
+  the receipt itself: adopt the choice and pass it to every later sibling that
+  must match it, or re-brief the child. Opening every child's work-log by reflex
   spends your context on information the diff already carries.
 - **Never take output you can't bound.** Do not run full test suites, `git diff`
   of a squash merge, or lint over a whole tree in your own context. Redirect to
@@ -295,8 +306,9 @@ its continue file path in its spawn prompt plus its continuation number.
 ## Your own return payload
 Unless you are the session root, your final response goes verbatim into YOUR
 parent's context. Return the same ~15-line receipt your children return you —
-status, work-log path, files, `needs-parent-read`, and at most one line of
-surprises. Your subtree's detail belongs in your work-log, not in your parent.
+status, work-log path, files, `needs-parent-read`, and at most one line each of
+surprises and decisions. Your subtree's detail belongs in your work-log, not in
+your parent.
 (The session root is the exception: it reports to the user, in prose — and prose
 for a human strips the reference IDs that are load-bearing here. A receipt to a
 parent says `R-008`; a report to the user says what the rule is. See

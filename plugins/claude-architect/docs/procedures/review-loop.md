@@ -8,6 +8,14 @@ resident in `ORCHESTRATION.md`; this is the loop mechanics only.
 surface) does not run this loop — tests, lint, and a diff read are the gate. This
 loop is for units whose footprint earned it.
 
+0. **Deterministic gate first — no reviewer spawns on red.** Run the project's
+   tests, lint and typecheck (and `containers.mjs check` when the map exists) in
+   the top-level worktree, each redirected to `.work-log/out/` with its exit
+   code captured. Any non-zero exit goes to an `implementation` or `fix` leaf
+   with the failing names, not to the reviewers: a model asked to review a
+   failing build spends its pass rediscovering what the exit code already said,
+   and the finding it produces costs a serial iteration. This applies on every
+   iteration, not only the first.
 1. Tag a pre-review anchor (`git tag review-i<N>-pre`) for rollback.
 2. **Pick the lens set from the diff**, then spawn it **in one message** so it
    runs concurrently. Preconditions are in ORCHESTRATION.md → *Code review

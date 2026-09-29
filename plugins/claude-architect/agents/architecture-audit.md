@@ -6,7 +6,7 @@ description: >
   moved structure, never on every review iteration. Answers the question the
   code-review and spec-audit agents do not: does this change still FIT the
   project, and is the wiki still TRUE? This is the drift gate.
-model: claude-opus-5
+model: claude-opus-5-5
 effort: high
 # Project-wide, long-horizon reasoning — the largest blast radius in the pipeline,
 # and the most expensive agent in it (top tier, high effort, reads whole wiki

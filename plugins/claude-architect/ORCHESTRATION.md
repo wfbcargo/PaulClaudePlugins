@@ -234,9 +234,11 @@ The orchestrator is the wiki's reader-of-record: it reads what a spawn needs and
 passes **section-level citations or short excerpts** in RELEVANT WIKI ENTRIES —
 never a bare "read `architecture.md`". Leaf and fix agents read ONLY what they're
 handed; they do not scan `.wiki/` to self-orient (missing context → a
-`paused_for_context` request, not a full-wiki read). The two auditors are the
-deliberate exception — `architecture-audit` and `spec-audit` read whole wiki files
-because judging fit/adherence against the whole picture IS their job.
+`paused_for_context` request, not a full-wiki read). The auditors are the
+deliberate exception — `architecture-audit` reads `architecture.md`,
+`conventions.md` and the relevant `decisions/` whole, and `spec-audit` reads its
+spec file whole, because judging fit/adherence against the whole picture IS their
+job.
 
 ### Active Rules
 
@@ -277,7 +279,14 @@ orchestrator's own agent file: `rejected wiki proposal from <child-id>:
 <reason>`. This applies to **local leaves too, not just remote ones** — the
 reason is concurrency, not location: two leaves writing in parallel cannot see
 each other's in-flight `decisions/<NNNN>` or `R-NNN` allocations, so two
-leaves can pick the same number. A single writer removes the race instead of
+leaves can pick the same number. The same race exists one level up: every
+orchestrator is the sole writer on *its own* branch, so two child orchestrators
+running in parallel would each allocate "the next" number. The parent therefore
+**reserves a number block for each child orchestrator** in its spawn prompt,
+carved from its own block (the session root owns the session's block — see
+`docs/procedures/multi-session.md`), and a child allocates only inside it. A
+child that runs out proposes upward like a leaf rather than guessing. A single
+writer per number range removes the race instead of
 detecting it after the fact.
 
 ---
@@ -567,6 +576,12 @@ unit gets tests plus a diff read, not the full loop.
 | Spec → Epic | Full test suite. Squashed-diff review. Spec-adherence audit. **Architecture-integrity audit** if its precondition fires (below). |
 | Epic/Spec → Active | Architecture-integrity audit if its precondition fires, then the Review Agent loop until clean. User reviews the PR on GitHub. |
 
+**Deterministic checks gate the model checks.** Tests, lint, typecheck and (when
+present) `containers.mjs check` run first, by exit code, and every audit lens
+below spawns only on green. A lens is for what a machine cannot answer; spending
+one on a red build buys a finding the exit code already gave you, and a serial
+review iteration to clear it.
+
 **Run the lenses concurrently.** Every audit lens is read-only, independent, and
 answers a different question — spawn the whole gated set in a single message and
 triage the receipts together. Serializing them multiplies gate latency and buys
@@ -734,8 +749,9 @@ status: completed
 work-log: .work-log/agents/<your-id>.md
 branch: <the branch you pushed>          # remote leaves only
 files: <paths touched, one line>
-needs-parent-read: no        # yes ONLY if the line below is non-empty
+needs-parent-read: no        # yes ONLY if one of the lines below is non-empty
 surprises: <blank, or ONE line: what happened that the diff does not show>
+decisions: <blank, or ONE line: choices the spawn prompt did not dictate that a sibling or the parent must match>
 ```
 
 A remote leaf's `work-log:` line points at its `.work-log-export/<your-id>.md`
@@ -747,7 +763,15 @@ The savings exist **only because the parent can then decline to open the file.**
 merges without reading anything. So `surprises` is the load-bearing field: set
 `needs-parent-read: yes` for a structural proposal, a deviation from the spawn
 prompt, a discovered constraint the next sibling must know, or anything the diff
-cannot show. Routine completion is not a surprise. Over-flagging costs the
+cannot show. Routine completion is not a surprise.
+
+`decisions` answers the standard objection to parallel agents: every action
+carries implicit choices, and two workers that cannot see each other make
+conflicting ones. A leaf that picked a name, a signature, a library or a format
+because its prompt left it open says so here, in one line. The parent reads it
+before spawning the next sibling or squash-merging, and either adopts the choice
+(passing it to later siblings) or re-briefs. A non-empty line implies
+`needs-parent-read: yes`. Over-flagging costs the
 parent its context; under-flagging costs correctness — when genuinely unsure,
 flag it.
 

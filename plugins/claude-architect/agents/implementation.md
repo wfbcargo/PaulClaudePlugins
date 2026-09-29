@@ -4,13 +4,13 @@ description: >
   Leaf coding agent for a single implementation phase inside one impl worktree.
   Narrow, well-scoped work dispatched by the orchestrator with a full spawn
   prompt (CONTEXT, ACTIVE RULES, SCOPE, WORK LOG). Does the actual code changes.
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 effort: medium
 # The highest-volume role (up to MAX_CONCURRENT_AGENTS at once), so it dominates
 # spend — and it is the one role where a model/effort change actually moves the
-# bill. Sonnet 5 is near-Opus on coding; medium effort suits a leaf that receives
+# bill. Sonnet 5.5 is near-Opus on coding; medium effort suits a leaf that receives
 # a fully-specified spawn prompt, because scoping tightly to what was asked is
-# the desired behaviour here, not a regression. Raise to `claude-opus-5` /
+# the desired behaviour here, not a regression. Raise to `claude-opus-5-5` /
 # `high` only if review iterations climb on your codebase.
 tools: Read, Write, Edit, MultiEdit, Grep, Glob, Bash
 ---
@@ -111,10 +111,17 @@ work-log: .work-log/agents/<your-id>.md
 files: <paths touched>
 needs-parent-read: no
 surprises: <blank, or ONE line the diff cannot show>
+decisions: <blank, or ONE line: choices your spawn prompt did not dictate that a sibling or your parent must match>
 ```
 
-Set `needs-parent-read: yes` only for a structural proposal, a deviation from your
-spawn prompt, a constraint the next sibling must know, or anything invisible in the
+`decisions` is for the choices the diff buries: a name, a signature, a
+library, a data format, an error convention you picked because the spawn prompt
+left it open. Parallel siblings cannot see each other, so an unstated choice is
+how two leaves build incompatible halves. Leave it blank when you only followed
+the prompt.
+
+Set `needs-parent-read: yes` only for a non-empty `decisions` line, a structural
+proposal, a deviation from your spawn prompt, a constraint the next sibling must know, or anything invisible in the
 diff — that flag is what lets your parent skip opening the file. Routine
 completion is not a surprise; when genuinely unsure, flag it. Any non-`completed`
 status implies `yes`.

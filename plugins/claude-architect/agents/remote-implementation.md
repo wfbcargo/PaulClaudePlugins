@@ -5,7 +5,7 @@ description: >
   Anthropic-managed cloud VM instead of a local worktree. Same narrow, scoped
   work as `implementation` — but with no filesystem shared with the
   orchestrator and no parent to answer a prompt mid-task.
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 effort: medium
 # Same role, same volume, same reasoning as implementation.md — see that
 # file's comment. Running remotely doesn't move either dial.
@@ -106,6 +106,7 @@ one extra line your parent needs because it cannot see your filesystem:
     files: <paths touched, one line>
     needs-parent-read: no
     surprises: <blank, or ONE line the diff cannot show>
+    decisions: <blank, or ONE line: choices your spawn prompt did not dictate that a sibling or your parent must match>
 
 Write this exact block twice: as the first thing in `.work-log-export/<your-id>.md`
 (see above — the channel your parent can actually rely on), and again as your
