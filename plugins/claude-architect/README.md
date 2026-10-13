@@ -191,9 +191,36 @@ orchestrators are rare. Then lower `MAX_REVIEW_ITERATIONS` and
 
 ## Status
 
-`0.3.0`. Extracted from a real project's `.claude/` setup. The agents and the
+`0.9.0`. Extracted from a real project's `.claude/` setup. The agents and the
 protocol are what the author actually runs; the model tiers are pinned to the
 *design* (silent-failure roles on the top tier, everything else bounded) and are
 meant to be remapped to whatever models you have.
+
+### What changed in 0.9.0
+
+Four gaps a real multi-agent round found (two co-op majors that turned out to
+be an unstated *who writes this*, review findings that were promised rows
+never written or rows that could not fail, every leaf re-running the whole
+suite, a guarded SKIP that stayed hollow after its dependency merged):
+
+- **State owners.** Every piece of state a spec touches now needs a declared
+  owner (`world` / `party` / `player` / `host-only` / `local`, or a named
+  container) in its `## State` section. `/architect` refuses to spawn
+  implementation while one is blank, `/seam` carries the owner across a
+  seam, and the `concurrency` review lens checks the shipped code against
+  what was declared.
+- **Acceptance pre-audit.** `test-audit` gains `mode: spec`: one cheap,
+  read-only pass over the spec's acceptance list, before any code exists,
+  checking every criterion names a checkable row, its negative path, and (for
+  shared `party`/`world` state) a two-actor row.
+- **Gate profiles.** A spec declares its `gate_profile` (`content` / `feature`
+  / `authority`), which sets a floor under the review lens set instead of
+  relying on diff-sniffing alone — `architecture-audit` stays
+  precondition-triggered on top of any profile.
+- **Test tiers.** Projects declare a fast tier (logic tests + touched suites)
+  and a full tier (`docs/procedures/test-tiers.md`): leaves run fast only, the
+  orchestrator runs full once per round on a quiet machine, a guarded SKIP
+  written while a dependency was in flight gets replaced by a real check once
+  that dependency merges, and `fix` agents still never commit.
 
 MIT licensed.

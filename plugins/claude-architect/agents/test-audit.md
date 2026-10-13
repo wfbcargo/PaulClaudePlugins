@@ -2,7 +2,9 @@
 name: test-audit
 description: >
   Read-only test-integrity auditor. PRECONDITION-GATED — runs when a diff adds or
-  changes tests, or adds logic with none. Answers the question no other lens
+  changes tests, or adds logic with none. Also runs once in SPEC MODE
+  (`mode: spec`) before the first implementation leaf spawns, over the spec's
+  acceptance list with no code yet. Answers the question no other lens
   asks: do these tests actually CONSTRAIN the behaviour, or do they merely pass?
   Green tests that assert nothing clear every other gate in the pipeline.
 model: claude-opus-5-5
@@ -49,6 +51,32 @@ Read the diff, the tests that cover it, and the spec's acceptance criteria
 6. **New logic with no test at all.** Say which functions, and whether the spec
    required one. Not every change needs a test; a change to a documented
    behaviour does.
+
+## Spec mode (`mode: spec` — before the first leaf spawns, no code yet)
+
+Your spawn prompt names `mode: spec` instead of a diff. Read only
+`.wiki/specs/<id>.md`; there is no code and no test suite to run. For every
+acceptance criterion, check:
+
+1. **Checkable.** Does it name a row a test could assert against — an input,
+   an expected output or state change — not a feeling ("works well", "feels
+   right")? No checkable row is the finding; name the criterion.
+2. **Negative path.** Does the criterion (or the spec around it) say what the
+   WRONG result looks like, not just the right one? "Rejects an expired
+   token" needs the rejection stated, not just "accepts a valid one."
+3. **Two-actor row for shared state.** For every `party`/`world` item in the
+   spec's `## State` section (P1 — see ORCHESTRATION.md), is there a row where
+   two actors touch that state — concurrently or in sequence — or does every
+   row only cover one actor? A shared-state criterion with no two-actor row is
+   a finding: a solo-actor test of shared state is the case least likely to
+   catch the real bug.
+
+There is no diff to audit, so findings here edit the SPEC, not code —
+`suggested_fix` is spec text, not a patch. Use categories `uncheckable |
+no-negative-path | missing-two-actor-row` in the same JSON shape as normal
+mode, finding ids prefixed `test-`. This mode is cheap by design (one
+read-only pass, no code to read) — do not skip it on a multi-phase spec to
+save a spawn.
 
 **Run the tests if a command is available** (the spawn prompt or
 `conventions.md` names it), and redirect output to a file rather than taking it
