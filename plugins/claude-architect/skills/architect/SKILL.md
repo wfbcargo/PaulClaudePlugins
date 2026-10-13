@@ -130,9 +130,9 @@ Then, before spawning the first implementation leaf, run `test-audit` ONCE
 with `mode: spec` over the spec file — no code exists yet, so this is a cheap
 read-only pass checking every acceptance criterion names a checkable row, its
 negative path, and (for any `party`/`world` state item) a two-actor row.
-`clean` or minors-only → proceed. A `blocking` line names a criterion to fix in
-the spec yourself — or ask the user, if the gap is a product decision — before
-any leaf spawns.
+`clean` or minors-only → proceed. A `needs_fixes`/`needs_human` verdict with a
+blocker-severity finding names a criterion to fix in the spec yourself — or ask
+the user, if the gap is a product decision — before any leaf spawns.
 
 ## 2. Show the plan before you spend it
 

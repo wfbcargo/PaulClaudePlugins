@@ -388,7 +388,8 @@ made.
    refusal to spawn, not a guess) and a `gate_profile` (`content` / `feature`
    / `authority`, see *Code review pipeline* below). Then run `test-audit`
    once with `mode: spec` over that file — cheap, read-only, no code yet — and
-   resolve any `blocking` line before the first implementation leaf spawns.
+   resolve every blocker-severity finding (verdict `needs_fixes` or
+   `needs_human`) before the first implementation leaf spawns.
 
 This taxonomy IS the orchestrate-vs-execute axis: epics and multi-impl specs are
 orchestration (top tier); single implementations are execution (bounded tier).
