@@ -61,9 +61,13 @@ from two paths; check-then-act sequences that aren't atomic (`if (!exists)
 create`); `await` between a read and its dependent write; missing idempotency on
 a retried or replayed operation; unbounded parallelism; lock ordering that
 differs between call sites; a transaction whose boundary doesn't enclose all the
-writes it assumes; cache/DB write ordering; cancellation leaving partial state.
-Report the **interleaving** that breaks it, not just the suspicious line — a
-concurrency finding without a concrete interleaving is a guess.
+writes it assumes; cache/DB write ordering; cancellation leaving partial state;
+a write path that doesn't match the state owner the spec declared for that data
+(`.wiki/specs/<id>.md` → `## State` — e.g. a `player`-owned record written by
+something other than its own owner, a `world`-scoped value mutated by a
+non-host, two declared owners both able to write the same state). Report the
+**interleaving** that breaks it, not just the suspicious line — a concurrency
+finding without a concrete interleaving is a guess.
 
 **`security`** — untrusted input reaching a sink (query, shell, path, template,
 deserializer); authz checked at the wrong layer or not at all on one path; secrets

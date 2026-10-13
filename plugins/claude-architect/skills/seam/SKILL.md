@@ -55,6 +55,13 @@ The properties that matter, in priority order:
 6. **No shared mutable state across it.** If both sides write the same thing, it
    is not a seam, it is a collision — go back to step 1.
 
+**Every piece of state the seam carries needs an owner first.** The spec's
+`## State` section (the spec template, and ORCHESTRATION.md → P1) names one per
+item: `world`, `party`, `player`, `host-only`, `local`, or a named container.
+If the state crossing this seam has no owner yet, that decision comes before
+the seam's shape, not after — a seam written against an unowned piece of state
+is usually how rule 6 gets violated, because nothing says who may write it.
+
 ## 3. Write it down, then hand it over identically
 
 Write the seam into `.wiki/specs/<id>.md` under a `## Seams` heading, and give
@@ -67,6 +74,8 @@ same bytes. Paraphrasing is how two agents end up with two contracts.
 ### `orchestration/auth` -> `engine/token`   (producer: engine/token)
 
     verifyToken(raw: string): { subject: string; expiresAt: number } | null
+
+Owner: `host-only` — the token never leaves the verifying process.
 
 - Returns `null` for any invalid token — malformed, expired, or wrong audience.
   It does NOT throw and does NOT distinguish the reasons; the consumer treats

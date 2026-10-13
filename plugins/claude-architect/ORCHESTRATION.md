@@ -38,6 +38,7 @@ trigger is the resident part; the steps are not.
 | `docs/model-routing.md` | Remapping model tiers, or after a classifier refusal |
 | `docs/procedures/containers.md` | The project has `.wiki/containers.yaml` and you are decomposing, assigning scope, or placing new code |
 | `docs/procedures/remote-execution.md` | Dispatching an `implementation` leaf and `REMOTE_EXECUTION` is not `off`, or a dispatched remote leaf has returned |
+| `docs/procedures/test-tiers.md` | Naming a leaf's test command, or about to run the round/unit's once-per-round full-tier proof |
 
 Mechanical git recipes are `scripts/`, not prose — invoke them rather than
 reconstructing the commands:
@@ -381,8 +382,13 @@ made.
    7e0e8fb3 api-surface: leaf ×2 @local`. This step is not optional and not
    implicit: a sub-unit with no recorded role is a delegation decision that was
    defaulted past rather than made.
-5. Emit the artifact — create the branch, write `.wiki/specs/<id>.md` before
-   spawning implementation work.
+5. Emit the artifact — create the branch, write `.wiki/specs/<id>.md` **with
+   every item in its `## State` section given an owner** (`world` / `party` /
+   `player` / `host-only` / `local`, or a named container — a blank owner is a
+   refusal to spawn, not a guess) and a `gate_profile` (`content` / `feature`
+   / `authority`, see *Code review pipeline* below). Then run `test-audit`
+   once with `mode: spec` over that file — cheap, read-only, no code yet — and
+   resolve any `blocking` line before the first implementation leaf spawns.
 
 This taxonomy IS the orchestrate-vs-execute axis: epics and multi-impl specs are
 orchestration (top tier); single implementations are execution (bounded tier).
@@ -576,11 +582,22 @@ unit gets tests plus a diff read, not the full loop.
 | Spec → Epic | Full test suite. Squashed-diff review. Spec-adherence audit. **Architecture-integrity audit** if its precondition fires (below). |
 | Epic/Spec → Active | Architecture-integrity audit if its precondition fires, then the Review Agent loop until clean. User reviews the PR on GitHub. |
 
-**Deterministic checks gate the model checks.** Tests, lint, typecheck and (when
-present) `containers.mjs check` run first, by exit code, and every audit lens
-below spawns only on green. A lens is for what a machine cannot answer; spending
-one on a red build buys a finding the exit code already gave you, and a serial
-review iteration to clear it.
+**Deterministic checks gate the model checks.** Tests (the project's **fast**
+tier — see `docs/procedures/test-tiers.md` → P4; the full tier is the
+orchestrator's own once-per-round proof, never a leaf's gate), lint, typecheck
+and (when present) `containers.mjs check` run first, by exit code, and every
+audit lens below spawns only on green. A lens is for what a machine cannot
+answer; spending one on a red build buys a finding the exit code already gave
+you, and a serial review iteration to clear it.
+
+**The spec's `gate_profile` sets a floor under the lens set (P3).** A spec
+states its kind as `content` (data/text only) → `test-audit`; `feature` →
+`review`/correctness + `test-audit`; `authority` (host authority, networking,
+concurrency, saves) → + `review`/concurrency. `architecture-audit` stays
+precondition-triggered on top of any profile — declaring a kind does not add
+it; structure actually moving does. The profile is a floor, not a ceiling: the
+diff-sniffing preconditions below still add a lens the profile didn't name,
+and a spec with no declared profile falls back to diff-sniffing alone.
 
 **Run the lenses concurrently.** Every audit lens is read-only, independent, and
 answers a different question — spawn the whole gated set in a single message and

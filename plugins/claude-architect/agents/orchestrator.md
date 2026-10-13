@@ -231,8 +231,11 @@ message —
 every lens is an independent read-only reader, and serializing them multiplies
 your gate latency for nothing.
 
-Always: `review` with `dimension: correctness`, plus `spec-audit`. Then add, only
-when the squashed diff shows the trigger:
+Always: `review` with `dimension: correctness`, plus `spec-audit`. The spec's
+`gate_profile` (ORCHESTRATION.md → P3) sets a floor under this set —
+`feature` adds `test-audit`, `authority` adds `review`/concurrency too — on
+top of which the diff-sniffing table below can still add a lens the profile
+didn't name:
 
 | Lens | Fires when the diff... |
 |---|---|

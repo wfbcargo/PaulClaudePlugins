@@ -112,6 +112,28 @@ If the request is too vague to classify — you cannot name the objective or say
 what "done" checks — ask the user for that, and only that, before continuing.
 Do not classify defensively upward to cover ambiguity.
 
+### State owners, and the acceptance pre-audit (before any leaf spawns)
+
+Once a spec exists (new or already on disk), **refuse to spawn implementation
+while its `## State` section leaves an owner blank.** Every piece of state the
+spec introduces or touches needs one: `world` (one per world, host-written),
+`party` (shared by whoever holds it), `player`/`owner` (one actor's own
+record), `host-only` (never leaves the host), `local` (one process, never
+synced), or a named container for a non-game project. A blank owner is a STOP,
+not a guess — write it in before the first leaf spawns, and when the owner is
+itself a product decision (is this one player's progress or a world-wide
+flag?), ask the user rather than inferring it from the code. The `concurrency`
+review lens later checks the shipped code against whatever you wrote here, so
+getting it right now is cheaper than finding out at review.
+
+Then, before spawning the first implementation leaf, run `test-audit` ONCE
+with `mode: spec` over the spec file — no code exists yet, so this is a cheap
+read-only pass checking every acceptance criterion names a checkable row, its
+negative path, and (for any `party`/`world` state item) a two-actor row.
+`clean` or minors-only → proceed. A `blocking` line names a criterion to fix in
+the spec yourself — or ask the user, if the gap is a product decision — before
+any leaf spawns.
+
 ## 2. Show the plan before you spend it
 
 **Anything that will spawn sub-agents or create a worktree gets a plan preview
@@ -137,8 +159,9 @@ attention.
 
 **Epic, or a spec of ≥2 coordinated phases, at moderate-or-larger footprint →
 orchestrate.** Create the branch and worktree with `scripts/new-worktree.sh`,
-write `.wiki/specs/<id>.md` before spawning any implementation work, and spawn
-per the *Sub-agent spawn template*. Remember that sequential phases do NOT get
+write `.wiki/specs/<id>.md` (state owners filled, acceptance pre-audit run — see
+above) before spawning any implementation work, and spawn per the *Sub-agent
+spawn template*. Remember that sequential phases do NOT get
 their own worktrees — they commit into the parent's.
 
 **Small footprint (≲5 files, no shared surface) → do it in place, whatever the
@@ -169,6 +192,10 @@ avoid the machinery.
 ## Do not
 
 - Do not start coding before the classification is recorded as an artifact.
+- Do not spawn an implementation leaf while the spec's `## State` section has a
+  blank owner, and do not skip the spec-mode `test-audit` pre-audit before the
+  first leaf spawns — both are cheap precisely because they run before any
+  code exists.
 - Do not spawn children for work you could finish in a handful of tool calls, or
   to verify work the review pipeline already gates — see `agents/orchestrator.md`
   → *Spawn discipline*. The taxonomy says what shape a sub-unit gets; it does not
