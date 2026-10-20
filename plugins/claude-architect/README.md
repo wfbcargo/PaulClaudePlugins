@@ -41,7 +41,7 @@ Tier comes from *kind*; the machinery comes from *footprint*, so a two-intent
 change to three files does not buy an epic's worth of process. Anything that
 will spawn agents or create worktrees prints a four-line plan preview
 (decomposition, agent count, worktree count, review passes) before spending, and
-stops to ask if the plan exceeds 6 agents or 3 worktrees. A single implementation
+stops to ask if the plan exceeds 8 agents or 3 worktrees. A single implementation
 gets an `AskUserQuestion` offering inline / worktree-only / full orchestration. A
 trivial task is just done, with the classification stated in one line.
 
