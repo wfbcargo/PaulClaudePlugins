@@ -200,3 +200,15 @@ test('an unresolvable relative import is reported as unchecked, not as clean', (
   // applies — but it must not vanish silently either.
   assert.deepEqual(r.rules, []);
 });
+
+test('a TypeScript package without the JS compiler API falls back to the hand scanner', () => {
+  // TypeScript 7 (the native port) installs a `typescript` package that exports
+  // only `version`. Using it as the compiler crashed `check` on ts.ScriptTarget.
+  const r = repo({
+    'package.json': '{ "name": "fixture", "private": true }',
+    'node_modules/typescript/package.json': '{ "name": "typescript", "version": "7.0.0", "main": "index.js" }',
+    'node_modules/typescript/index.js': 'module.exports = { version: "7.0.0" };',
+    'src/engine/db/index.ts': 'import { login } from "../../orchestration/auth/index";\nexport const find = login;',
+  });
+  assert.deepEqual(r.rules, ['R1-direction']);
+});
