@@ -150,7 +150,7 @@ cost: ~<n> agents, <n> worktrees, ≤<n> review passes
 go
 ```
 
-If the plan comes out at more than **6 agents or 3 worktrees**, stop and check
+If the plan comes out at more than **8 agents or 3 worktrees**, stop and check
 with `AskUserQuestion` before starting — offer the plan as-is against a leaner
 version you name concretely. A run that size is worth ten seconds of the user's
 attention.
