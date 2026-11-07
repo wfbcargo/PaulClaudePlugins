@@ -197,6 +197,7 @@ Beyond the obvious keys:
 | Key | Default | |
 |---|---|---|
 | `policy.topology` | `folders` | `folders` \| `packages` |
+| `policy.root` | `src` | `.` for a repo whose code sits in root-level folders; hidden directories are never walked |
 | `policy.pure_paths` | `[]` | sub-paths that may import nothing outside themselves |
 | `policy.type_imports` | `edge` | `ignore` to stop counting `import type` |
 | `policy.unclassified` | `warn` / `error` | error under `packages`; that is the fail-closed default |
@@ -219,7 +220,7 @@ alone has a hole.
 cd plugins/claude-boundaries && npm test
 ```
 
-71 tests, no dependencies. Each rule is asserted to fire on the violation **and**
+78 tests, no dependencies. Each rule is asserted to fire on the violation **and**
 to stay quiet on the nearest legal thing to it — a rule that fires on
 legitimate code gets the whole check switched off, and a checker nobody runs
 enforces less than no checker at all, because everyone believes it is running.

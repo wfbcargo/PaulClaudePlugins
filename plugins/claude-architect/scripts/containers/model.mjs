@@ -23,8 +23,12 @@ export class ConfigError extends Error {
 
 const norm = (p) => String(p).replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
 
-/** True when `child` is inside `parent` (or equal). Segment-aware: src/ab is not under src/a. */
+/** True for a path naming the repository itself: `norm` leaves `.` as `.` and turns `./` into ``. */
+const isRepoRoot = (p) => p === '' || p === '.';
+
+/** True when `child` is inside `parent` (or equal). Segment-aware: src/ab is not under src/a. Everything is under the repo root. */
 function isUnder(child, parent) {
+  if (isRepoRoot(parent)) return true;
   return child === parent || child.startsWith(parent + '/');
 }
 
@@ -78,7 +82,7 @@ export function loadModel(configPath) {
   // ---- policy -------------------------------------------------------------
   const p = raw.policy || {};
   const policy = {
-    root: norm(p.root ?? 'src'),
+    root: norm(p.root ?? 'src') || '.',
     skip_layers: p.skip_layers === true,
     public_surface: [].concat(p.public_surface ?? ['index.ts']).filter(Boolean).map(String),
     language: p.language ?? null,
@@ -263,4 +267,4 @@ export function loadModel(configPath) {
   };
 }
 
-export { norm, isUnder };
+export { norm, isUnder, isRepoRoot };

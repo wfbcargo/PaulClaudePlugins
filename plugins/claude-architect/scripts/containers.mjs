@@ -13,7 +13,7 @@
 import { writeFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
-import { findConfig, loadModel, ConfigError, norm } from './containers/model.mjs';
+import { findConfig, loadModel, ConfigError, norm, isRepoRoot } from './containers/model.mjs';
 import { emit, TARGETS, targetForLanguage } from './containers/emit.mjs';
 
 const argv = process.argv.slice(2);
@@ -172,11 +172,17 @@ function cmdCheck() {
       // modules for a directory argument, which reads as "clean" — a false
       // negative in a gate is worse than no gate. Keep the extension list in
       // sync with enhancedResolveOptions in emit.mjs.
-      const target = `${model.policy.root}/**/*.{ts,tsx,js,jsx,mjs,cjs}`;
+      // A repo-root policy.root would glob node_modules, build output and every
+      // worktree, so it cruises the declared container paths instead.
+      const exts = '**/*.{ts,tsx,js,jsx,mjs,cjs}';
+      const globs = isRepoRoot(model.policy.root)
+        ? model.containers.map((c) => `${c.path}/${exts}`)
+        : [`${model.policy.root}/${exts}`];
+      const target = globs.join(' ');
       let raw;
       try {
         raw = execFileSync('npx', ['--no-install', 'depcruise', '--config', configFile,
-                                   '--output-type', 'json', target],
+                                   '--output-type', 'json', ...globs],
                            { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, shell: process.platform === 'win32' });
       } catch (err) {
         // depcruise exits non-zero when it finds violations; the JSON is still on stdout.

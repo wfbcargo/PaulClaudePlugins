@@ -42,10 +42,17 @@ export class ConfigError extends Error {
 
 export const norm = (p) => String(p).replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
 
-/** True when `child` is inside `parent` (or equal). Segment-aware: src/ab is not under src/a. */
+/** True for a path naming the repository itself: `norm` leaves `.` as `.` and turns `./` into ``. */
+export const isRepoRoot = (p) => p === '' || p === '.';
+
+/** True when `child` is inside `parent` (or equal). Segment-aware: src/ab is not under src/a. Everything is under the repo root. */
 export function isUnder(child, parent) {
+  if (isRepoRoot(parent)) return true;
   return child === parent || child.startsWith(parent + '/');
 }
+
+/** `rel` under a repo-relative directory, with no `./` or leading `/` when that directory is the repo root. */
+export const underDir = (dir, rel) => (isRepoRoot(dir) ? rel : `${dir}/${rel}`);
 
 /** Compile a `**`/`*`/`?` glob into an anchored regex over a `/`-separated path. */
 export function globToRegExp(glob) {
@@ -155,7 +162,7 @@ export function loadModel(configPath) {
   const language = p.language ?? 'typescript';
   const policy = {
     topology,
-    root: norm(p.root ?? 'src'),
+    root: norm(p.root ?? 'src') || '.',
     package_roots: [].concat(p.package_roots ?? ['packages/*', 'apps/*']).filter(Boolean).map(norm),
     skip_layers: p.skip_layers === true,
     public_surface: [].concat(p.public_surface ?? ['index.ts']).filter(Boolean).map(String),

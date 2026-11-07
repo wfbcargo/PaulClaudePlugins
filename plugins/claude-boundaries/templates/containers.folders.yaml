@@ -34,7 +34,7 @@ layers:
 
 policy:
   topology: folders          # folders | packages
-  root: src                  # repo-relative source root
+  root: src                  # repo-relative source root; `.` when code sits in root-level folders (app/, lib/)
   skip_layers: false         # false: surface may not reach engine directly
   public_surface: [index.ts] # the only importable file(s) in a container
   language: typescript       # typescript | javascript | python

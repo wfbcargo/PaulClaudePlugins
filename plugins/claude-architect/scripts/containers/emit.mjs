@@ -7,6 +7,7 @@
 // artifacts and should be committed but never hand-edited.
 
 import { basename } from 'node:path';
+import { isRepoRoot } from './model.mjs';
 
 const rx = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const alt = (paths) => `^(${paths.map(rx).join('|')})/`;
@@ -58,7 +59,8 @@ function emitDependencyCruiser(model) {
           `container. Rules that need I/O belong one level up; if a rule needs data, take it ` +
           `as an argument.`,
         from: { path: `^${rx(dir)}/` },
-        to: { path: `^${rx(policy.root)}/`, pathNot: `^${rx(dir)}/` },
+        // A repo-root policy.root bounds nothing, so the pattern is every path.
+        to: { path: isRepoRoot(policy.root) ? '^' : `^${rx(policy.root)}/`, pathNot: `^${rx(dir)}/` },
       });
     }
 
@@ -104,6 +106,11 @@ module.exports = ${JSON.stringify({
 
 function emitImportLinter(model) {
   const { containers, layers, policy } = model;
+  if (isRepoRoot(policy.root)) {
+    // import-linter needs one root package to name every module from; the repo
+    // itself is not one.
+    throw new Error('import-linter needs policy.root to be the Python package directory, not the repo root `.`');
+  }
   const pkg = basename(policy.root);
   const mod = (path) => path.split('/').join('.').replace(/^[^.]+\./, `${pkg}.`);
 
