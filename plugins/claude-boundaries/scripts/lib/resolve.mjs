@@ -15,7 +15,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve as resolvePath } from 'node:path';
-import { norm, globToRegExp } from './model.mjs';
+import { norm, globToRegExp, underDir } from './model.mjs';
 
 const NODE_BUILTIN = /^node:/;
 // Node's legacy unprefixed built-ins. Kept short and explicit: guessing wrong
@@ -136,7 +136,7 @@ export function createResolver(model) {
     const asPath = specifier.replace(/\./g, '/');
     for (const suffix of ['.py', '.pyi', '/__init__.py']) {
       if (existsSync(join(root, `${asPath}${suffix}`))) return { kind: 'internal', file: norm(`${asPath}${suffix}`), specifier };
-      const underRoot = `${model.policy.root}/${asPath}${suffix}`;
+      const underRoot = underDir(model.policy.root, `${asPath}${suffix}`);
       if (existsSync(join(root, underRoot))) return { kind: 'internal', file: norm(underRoot), specifier };
     }
     return { kind: 'external', pkg: specifier.split('.')[0], specifier };

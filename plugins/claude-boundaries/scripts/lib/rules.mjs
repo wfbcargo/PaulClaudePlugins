@@ -19,7 +19,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { norm, isUnder, globToRegExp } from './model.mjs';
+import { norm, isUnder, isRepoRoot, globToRegExp } from './model.mjs';
 import { createResolver, packageNameOf } from './resolve.mjs';
 import { scanTs, scanWithTypeScript } from './scan-ts.mjs';
 import { scanPy } from './scan-py.mjs';
@@ -34,12 +34,17 @@ export function listSourceFiles(root, dir, extensions) {
     try { entries = readdirSync(join(root, rel), { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       if (SKIP_DIRS.has(e.name)) continue;
+      // Hidden directories (.next, .worktrees, .claude) hold build output,
+      // tooling or whole other checkouts, never mapped source. This matters
+      // once policy.root is the repo itself and the walk starts there.
+      if (e.isDirectory() && e.name.startsWith('.')) continue;
       const child = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) walk(child);
       else if (extensions.some((x) => e.name.endsWith(x))) files.push(norm(child));
     }
   };
-  walk(norm(dir));
+  const start = norm(dir);
+  walk(isRepoRoot(start) ? '' : start);
   return files;
 }
 
