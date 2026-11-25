@@ -60,11 +60,11 @@ The config is a strict superset of `claude-architect`'s `containers.yaml`, so
 
 `godot-lsp`, `rig-anything`, `animate-anything`, `lookdev`, `follow-through`, `humanform` and
 `wardrobe` now live in their own marketplace,
-[blender-godot-plugins](https://github.com/wfbcargo/blender-godot-plugins), with their history. If
+[blender-godot-plugins](https://github.com/LiveFormDemos/LiveForm-Plugins), with their history. If
 you installed one from here:
 
 ```
-/plugin marketplace add wfbcargo/blender-godot-plugins
+/plugin marketplace add LiveFormDemos/LiveForm-Plugins
 /plugin install rig-anything@blender-godot-plugins
 ```
 
