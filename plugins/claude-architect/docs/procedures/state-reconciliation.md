@@ -15,6 +15,13 @@ field updates for you or the user to apply.
 - Stale `review-i<N>-pre` tags left by a loop that exited badly.
 - Stale `.review/` or `.work-log/` inside already-merged worktrees.
 - Rules with broken `Source:` links.
+- A stale `.wiki/graph.json` (`scripts/wiki-graph.mjs --check` exits 1) → propose
+  `--index`. Its ghost nodes are IDs the wiki cites with no file: report the ones
+  that look like this project's own (a spec or ADR that was never written).
+- With `.wiki/ideas/` in use (`scripts/wiki-graph.mjs --ideas` lists both):
+  specs and decisions no idea holds → propose the idea each belongs under, or a
+  new idea for the user to agree; an idea file missing from the `ideas.md`
+  index → propose its index line.
 - Dangling `paused_for_context` agents — a request nobody answered.
 
 ## Continue-file drift

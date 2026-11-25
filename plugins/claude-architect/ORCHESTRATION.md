@@ -47,6 +47,7 @@ reconstructing the commands:
 |--------|------|
 | `scripts/new-worktree.sh <tier> <slug> [parent]` | Dirty-check, id, branch, worktree, `[target:]` commit, work-log dirs, dependency setup. Prints `branch=` / `worktree=` / `unit_id=` / `target=`. |
 | `scripts/squash-up.sh <branch> <msg> [--from-origin] [--keep-worktree]` | Squash into the derived parent, commit, remove worktree, delete branch. `--from-origin` for a branch that lives on a remote leaf's push rather than a local worktree. Prints `merged=` / `into=` / `parent_worktree=`. Exits 2 on conflict having committed nothing, and 3 when the leaf pushed only a work-log (a failure or escalation) — nothing merged, `origin/<branch>` kept. |
+| `scripts/wiki-graph.mjs [--index \| --check \| --node <id> [--hops N]]` | The wiki as a graph: `--index` regenerates `.wiki/graph.json`, `--check` exits 1 when it is stale, `--node` prints one node's links with file:line. With no flag it writes a page to walk the wiki in (for humans). |
 | `scripts/containers.mjs <cmd>` | Container map: `validate` / `check [--changed]` / `where <path>` / `scope <id>` / `emit`. No-ops loudly when the project has no `.wiki/containers.yaml`. |
 | `scripts/worktree-setup.sh <main> <worktree>` | Called automatically by `new-worktree.sh`. Links dependency trees, copies env files. Override per project with `.claude/worktree-setup.sh`. |
 | `scripts/remote-preflight.sh` | Checks the origin and plugin-declaration eligibility conditions (see `docs/procedures/remote-execution.md` → *Eligibility*). Prints `remote_available=` / `reason=` / `origin=` / `default_branch=` / `base_pushed=` / `plugin_declared=` / `setup_script_committed=` / `github_app=`. |
@@ -198,9 +199,13 @@ discover knowledge worth keeping. A starter skeleton lives in this plugin's
 ```
 .wiki/
 ├── README.md           # Index. Links to everything else.
+├── ideas.md            # Index of the app's major concepts, one line each. Start here — see "Ideas".
+├── ideas/              # One file per idea: summary, anchors, what, why, open questions, where to start.
+│   └── <slug>.md
 ├── conventions.md      # Coding conventions, naming, formatting decisions.
 ├── architecture.md     # System layout, module boundaries, data flow.
 ├── containers.yaml     # OPTIONAL. Machine-readable layer/container map — see CONTAINER MODEL.
+├── graph.json          # GENERATED. Every node and edge of the wiki — see "The graph index".
 ├── rules.md            # Active project rules. Passed to every sub-agent at spawn.
 ├── decisions/          # One file per architectural decision (ADR-style).
 │   └── <NNNN>-<slug>.md
@@ -211,7 +216,8 @@ discover knowledge worth keeping. A starter skeleton lives in this plugin's
 ```
 
 Fixed structure. Don't invent new top-level files; extend existing ones or add a
-`decisions/<NNNN>-<slug>.md` entry.
+`decisions/<NNNN>-<slug>.md` entry. `graph.json` is the one generated file: never
+edit it by hand, regenerate it.
 
 ### Size budgets (the wiki is read context, so it has a budget)
 
@@ -224,6 +230,8 @@ Every wiki file an agent might read costs context. Keep them lean:
 | `containers.yaml` | grows with the architecture, not with time | A container list that keeps growing means they're cut too fine — see CONTAINER MODEL |
 | `gotchas.md`, `glossary.md` | grows slowly; one line per entry | Prune entries no longer true |
 | `decisions/<NNNN>` | one decision per file | Never merge or renumber |
+| `ideas.md`, `ideas/<slug>.md` | ~5–15 ideas; each file under a screen, its anchor lists grow | More than ~15 means ideas are cut too fine (merge them); one holding most of the specs means it is too broad (split it) |
+| `graph.json` | generated; grows with the wiki, never read whole | Never edited by hand — regenerate |
 
 Default is **omit** (see "When agents write to the wiki"). A file over budget is a
 signal to consolidate, not to keep appending. A stale or bloated wiki is a tax on
@@ -240,6 +248,104 @@ deliberate exception — `architecture-audit` reads `architecture.md`,
 `conventions.md` and the relevant `decisions/` whole, and `spec-audit` reads its
 spec file whole, because judging fit/adherence against the whole picture IS their
 job.
+
+### Ideas
+
+An **idea** is one of the app's major concepts — "Place is the index", "Agents
+on the harness", "Workspaces are the boundary" — the level a person thinks at
+when they ask why a spec exists. **Ideas are the wiki's entry point:** an agent
+starts at the idea a piece of work belongs to and walks down from there to the
+specs, the decisions, and everything else. Ideas are specific to the app, never
+framework concepts like "review" or "worktrees".
+
+**One file per idea**, `.wiki/ideas/<slug>.md`. Frontmatter is for machines;
+the body is the context a reader needs to start there:
+
+```
+---
+idea: place-is-the-index
+summary: The app is organised by where things happen: a site, a facility, its rooms.
+maturity: emerging            # emerging | active | settled
+builds_on: one-space          # other ideas, by slug
+specs: 028c45b3, 038b975e     # anchors: the specs and decisions this idea is made of
+decisions: ADR 0034, ADR 0035
+rules: R-012                  # optional anchors
+containers: orchestration/places
+---
+# Place is the index
+## What it is      — the concept, in a paragraph
+## Why             — the problem it answers, from the decision that made it
+## Open questions  — unsettled points, each tied to its source
+## Start here      — the two to four things to read first, in order
+```
+
+`.wiki/ideas.md` is the index: one line per idea (link, maturity, summary), so
+every concept the app has fits in a few hundred tokens.
+
+**Only the anchors are written by hand.** Everything else is worked out from the
+graph (see *The graph index*) and cannot go stale: the idea's **reading list**
+(its anchors, then every spec, decision, rule, container, wiki section, gotcha
+and term one typed link from them, ranked by how many anchors point there) and
+its **state** (its specs' statuses, its open proposed decisions and draft specs,
+its latest decision). `wiki-graph.mjs --ideas` prints every idea in two lines;
+`--idea <slug>` prints one reading list top down, with file:line for each entry.
+
+**Every spec and decision is filed under at least one idea.** When the
+orchestrator writes a new spec or ADR, it adds the ID to the `specs:` or
+`decisions:` line of the idea it serves, in the same commit. Work that fits no
+idea is either a new idea (write its file and its index line, and tell the
+user: a new concept is a product decision, agreed before it is built on) or a
+sign the work is off course; ask before inventing an idea to fit. Refresh an
+idea's *Open questions* when one is settled; rewrite *What it is* only when the
+concept itself moves. A spec or decision may sit under more than one idea.
+
+**How the orchestrator uses ideas:**
+- **Routing.** Before classifying a request, place it under an idea:
+  `--ideas`, then `--idea <slug>`. A request that fits none is raised with the
+  user as a product question before it is decomposed.
+- **Context for spawns.** RELEVANT WIKI ENTRIES come from the unit's idea
+  reading list: the anchors and highest-ranked entries that the unit's scope
+  touches, cited by file:line, plus the idea's summary line. Not a hand search.
+- **Scope.** The idea's reading list names the containers its work normally
+  touches; `architecture-audit` flags a diff that reaches well outside them.
+- **Orientation.** Session start, a continue file and a handoff summarise by
+  idea (what is in flight under each), not by reading the whole wiki.
+
+A project with no `ideas/` behaves as before. The first time the orchestrator
+writes one, it files the existing specs and decisions too, and agrees the list
+with the user.
+
+### The graph index
+
+`.wiki/graph.json` is the wiki's map: every spec, decision, rule, container,
+layer, glossary term, gotcha and page section as a node with its file and line,
+and every reference between them as an edge — typed where the wiki says how two
+things relate (`builds_on`, `amends`, `supersedes`, `extends`, a rule's `source`,
+`consumes`, `state_in` for a container in a spec's State table, `code_in` for a
+path under a container, `uses_term`), `mentions` otherwise. An ID cited with no
+file of its own is a `ghost` node. It holds no page text; it is one node or edge
+per line, so a grep is a traversal.
+
+**Use it to choose what to cite, instead of opening documents to find out.**
+Before building RELEVANT WIKI ENTRIES, or before reading a decision to see what
+it touches, look the unit's IDs up: `grep '"spec:<id>"' .wiki/graph.json`, or
+`scripts/wiki-graph.mjs --node <id> --hops 2` for a readable list with file:line.
+Then open only the entries that come back. Ghosts are worth one line in the
+spawn prompt: the wiki cites them but has nothing to hand over.
+
+**Keeping it current is mechanical.** The orchestrator is the only writer of
+`.wiki/`, so it is the only one who can make the index stale:
+- `squash-up.sh` regenerates and stages it whenever the squashed unit changed
+  `.wiki/`, and when `graph.json` is the only conflict it regenerates it from
+  the merged wiki instead of stopping. Never hand-merge it.
+- After applying wiki proposals or editing `.wiki/` directly, run
+  `scripts/wiki-graph.mjs --index` and commit it in the same commit.
+- `scripts/wiki-graph.mjs --check` is part of the deterministic gate before a PR
+  (`docs/procedures/review-loop.md`, step 0).
+
+A project whose `.wiki/` has no `graph.json` yet gets one the first time the
+orchestrator writes the wiki (`--index`); until then the scripts leave it alone.
+Leaves never run `--index`: they do not write `.wiki/`.
 
 ### Active Rules
 
@@ -265,7 +371,10 @@ their list.
 you are the orchestrator). A wiki entry is warranted when a finding is
 **durable** (still true in a month), **non-obvious from the code**, and
 **project-scoped**. An architectural
-decision → a `decisions/<NNNN>-<slug>.md` entry. A new rule → append to
+decision → a `decisions/<NNNN>-<slug>.md` entry, filed under its idea (its
+`decisions:` line). A new major concept → a new `ideas/<slug>.md` and its index
+line in `ideas.md`, agreed with the
+user. A new rule → append to
 `rules.md`. A "we tried X, it failed because Y" → `gotchas.md`. A clarified
 convention → `conventions.md`. A new domain term → `glossary.md`. Default is
 **omit**: if you can't say why a future agent will need a note, don't add it.
@@ -382,7 +491,8 @@ made.
    7e0e8fb3 api-surface: leaf ×2 @local`. This step is not optional and not
    implicit: a sub-unit with no recorded role is a delegation decision that was
    defaulted past rather than made.
-5. Emit the artifact — create the branch, write `.wiki/specs/<id>.md` **with
+5. Emit the artifact — create the branch, add the spec's ID to its idea's
+   `specs:` line in `.wiki/ideas/<slug>.md` (see PROJECT WIKI → *Ideas*), write `.wiki/specs/<id>.md` **with
    every item in its `## State` section given an owner** (`world` / `party` /
    `player` / `host-only` / `local`, or a named container — a blank owner is a
    refusal to spawn, not a guess) and a `gate_profile` (`content` / `feature`
@@ -525,6 +635,8 @@ whole file isn't global — see PROJECT WIKI → Active Rules.>
 ## RELEVANT WIKI ENTRIES
 <SECTION-level citations or short excerpts the spawning agent judged relevant —
 "architecture.md#data-flow", or a 2-4 line quote — NOT a bare "read architecture.md".
+With ideas in use: open with the idea's summary line, then pick from its
+`--idea` reading list.
 The agent reads only these; cite them back in your work-log if they influenced you.>
 
 ## CONTEXT

@@ -57,6 +57,14 @@ Spend your judgment on the residual it cannot see:
    code as it now is? Flag any section the change made stale.
 5. **Convention drift.** New naming/structure that diverges from
    `conventions.md` without a clarifying update?
+6. **Idea scope** (when `.wiki/ideas/` exists). Find the unit's idea (the one
+   whose `specs:` line names its spec) and run
+   `scripts/wiki-graph.mjs --idea <slug> --all`. Its *Containers* list is where
+   that idea's work has landed so far. A diff that changes code in a container
+   the list does not name is a finding (category `architecture`, severity
+   minor, not auto-fixable): either the work reaches into another idea and the
+   spec should say so, or the idea has grown and its file should. A spec or ADR
+   the unit added that no idea files is a `wiki` finding.
 
 Reading whole wiki files here is correct and expected — this is the one role
 whose job IS the full architectural picture; the "read only what's cited"

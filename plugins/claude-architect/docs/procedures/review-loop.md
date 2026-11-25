@@ -9,7 +9,8 @@ surface) does not run this loop — tests, lint, and a diff read are the gate. T
 loop is for units whose footprint earned it.
 
 0. **Deterministic gate first — no reviewer spawns on red.** Run the project's
-   tests, lint and typecheck (and `containers.mjs check` when the map exists) in
+   tests, lint and typecheck (and `containers.mjs check` when the map exists, and
+   `wiki-graph.mjs --check` when `.wiki/graph.json` exists) in
    the top-level worktree, each redirected to `.work-log/out/` with its exit
    code captured. Any non-zero exit goes to an `implementation` or `fix` leaf
    with the failing names, not to the reviewers: a model asked to review a
