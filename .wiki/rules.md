@@ -48,7 +48,8 @@ allocator of `decisions/<NNNN>` and `R-NNN` numbers.
 Scope: global
 Added: 2026-09-17 | Source: ORCHESTRATION.md (PROJECT WIKI, "Structure")
 Don't invent new top-level files. Extend an existing one, or add a
-`decisions/<NNNN>-<slug>.md` entry.
+`decisions/<NNNN>-<slug>.md` entry. `graph.json` is the one generated file
+(`scripts/wiki-graph.mjs --index`, 0.10.0): regenerated, never hand-edited.
 
 ## R-007: Never reference `ORCHESTRATION.md` from `CLAUDE.md`
 Scope: global

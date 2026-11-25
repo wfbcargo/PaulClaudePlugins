@@ -44,6 +44,7 @@ Act on what you find:
 | Orphan worktrees or branches, or the tree looks off | Spawn `state-doctor` per ORCHESTRATION.md → *Drift* before decomposing. |
 | No `.wiki/` | Offer to seed it from `${CLAUDE_SKILL_DIR}/../../wiki-template/`. Do not proceed silently without one — `rules.md` is what every spawn carries. |
 | `containers.mjs` says no map | The project doesn't use the container model. Fine — skip every container step below. Do NOT offer to introduce one mid-request; that is its own spec. |
+| `.wiki/ideas/` exists | Place the request under an idea before classifying: `node ${CLAUDE_SKILL_DIR}/../../scripts/wiki-graph.mjs --ideas`, then `--idea <slug>` for the one it belongs to. Its reading list is where this unit's RELEVANT WIKI ENTRIES come from. If it fits no idea, say so to the user and ask: a new concept is a product decision. |
 | `containers.mjs` reports **Invalid** | Stop. A broken map mis-scopes every agent you are about to spawn. Show the problems and fix them first — it is a config edit, usually one line. |
 
 ## 1. Classify — kind, then footprint
@@ -160,7 +161,8 @@ attention.
 **Epic, or a spec of ≥2 coordinated phases, at moderate-or-larger footprint →
 orchestrate.** Create the branch and worktree with `scripts/new-worktree.sh`,
 write `.wiki/specs/<id>.md` (state owners filled, acceptance pre-audit run — see
-above) before spawning any implementation work, and spawn per the *Sub-agent
+above) and add it to its idea's `specs:` line in `.wiki/ideas/<slug>.md` before spawning any
+implementation work, and spawn per the *Sub-agent
 spawn template*. Remember that sequential phases do NOT get
 their own worktrees — they commit into the parent's.
 

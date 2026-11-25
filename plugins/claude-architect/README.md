@@ -99,6 +99,28 @@ tests for a reason unrelated to its work. Override it per project with
 `remote-collect.sh` do the equivalent for a leaf dispatched to a cloud VM
 instead of a local worktree — see [`docs/procedures/remote-execution.md`](./docs/procedures/remote-execution.md).
 
+**The wiki as a graph** — [`scripts/wiki-graph.mjs`](./scripts/wiki-graph.mjs) reads a `.wiki/`
+into nodes (specs, decisions, rules, containers, layers, glossary terms, gotchas,
+page sections) and edges (`builds_on`, `amends`, `supersedes`, `extends`, a rule's
+`source`, `consumes`, `state_in` for a container in a spec's State table, `code_in`
+for a path under a container, `uses_term`, and plain `mentions`). An ID the wiki
+cites with no file of its own becomes a ghost node. No dependencies.
+
+- `--index` writes `.wiki/graph.json`: no page text, sorted, one node or edge per
+  line, so `grep spec:1db403e5 .wiki/graph.json` returns the spec and every link it
+  has, with the file and line to read next. `--check` exits 1 when the index no
+  longer matches the wiki. `--node <id> [--hops N]` prints a node's links.
+- With no flag it writes one self-contained page (`.wiki-graph.html` beside the
+  wiki; `--open` opens it): a force graph to walk. Click a node to read it, follow
+  its links from the panel (the walk is kept as a trail you can step back along),
+  shift-click a second node for the shortest path between them, filter by kind or
+  by how things relate.
+
+```bash
+node scripts/wiki-graph.mjs --open                # nearest .wiki/ at or above here
+node scripts/wiki-graph.mjs path/to/.wiki --index
+```
+
 **Supporting docs**: [`docs/model-routing.md`](./docs/model-routing.md) (tiering,
 fallback, and how to remap models to what you have), a `.wiki/` starter
 skeleton in [`wiki-template/`](./wiki-template/), and remote (cloud) execution
@@ -191,10 +213,34 @@ orchestrators are rare. Then lower `MAX_REVIEW_ITERATIONS` and
 
 ## Status
 
-`0.9.0`. Extracted from a real project's `.claude/` setup. The agents and the
+`0.10.0`. Extracted from a real project's `.claude/` setup. The agents and the
 protocol are what the author actually runs; the model tiers are pinned to the
 *design* (silent-failure roles on the top tier, everything else bounded) and are
 meant to be remapped to whatever models you have.
+
+### What changed in 0.10.0
+
+- **The wiki as a graph.** `scripts/wiki-graph.mjs` turns a `.wiki/` into a
+  graph of its specs, decisions, rules, containers, terms and gotchas: an index
+  (`.wiki/graph.json`, with a `--check` for staleness) that an agent can grep
+  instead of opening every document, and a page people can walk.
+- **The index is kept current.** `graph.json` is the wiki's one generated file.
+  The orchestrator looks a unit's IDs up in it to pick what to cite, and
+  `squash-up.sh` regenerates it whenever a unit changes `.wiki/`, including when
+  it is the only conflict. `--check` joins the pre-PR gate, and a stale index is
+  on the state-doctor's drift checklist.
+- **Ideas, the wiki's entry point.** Each of the app's major concepts gets a
+  file, `.wiki/ideas/<slug>.md`: frontmatter for machines (summary, maturity,
+  what it builds on, its anchor specs and decisions) and a body for readers
+  (what it is, why, open questions, where to start). `ideas.md` is the
+  one-line-per-idea index. Each idea's reading list and state are worked out
+  from the graph into `graph.json`, never written by hand, and
+  `wiki-graph.mjs --idea <slug>` prints the list top down: idea → specs →
+  decisions → rules → containers → gotchas and terms. `/architect` places every
+  request under an idea before classifying it, spawn context comes from the
+  reading list, `architecture-audit` flags a diff outside its idea's
+  containers, and every new spec and ADR is filed under an idea (a new concept
+  is agreed with the user).
 
 ### What changed in 0.9.0
 

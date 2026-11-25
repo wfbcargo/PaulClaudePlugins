@@ -30,7 +30,12 @@
 #                 two actually exists in that mode.
 #
 # On conflict this stops having committed nothing: report the conflicting paths
-# to the user and ask before proceeding. Never resolve silently.
+# to the user and ask before proceeding. Never resolve silently. The one
+# exception is .wiki/graph.json, which is generated (wiki-graph.mjs --index):
+# when it is the only conflict it is regenerated from the merged wiki, and
+# whenever the unit changed .wiki/ it is regenerated before the commit, so the
+# index never lags the wiki it describes. A project with no graph.json is left
+# alone.
 #
 # Exit codes:
 #   0  merged and committed. Prints merged=/into=/parent_worktree=.
@@ -44,6 +49,9 @@
 #      status=empty-after-strip — go read the log via remote-collect.sh,
 #      then re-dispatch the unit; this is a normal outcome, not an error.
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GRAPH=".wiki/graph.json"
 
 BRANCH="${1:?branch required}"
 MESSAGE="${2:?commit message required}"
@@ -86,12 +94,32 @@ else
   MERGE_REF="$BRANCH"
 fi
 
+# Regenerate the wiki's graph index in worktree $1 and stage it. Node is
+# test-invoked, not trusted from `command -v` alone.
+regen_graph() {
+  [ -e "$1/$GRAPH" ] || return 0
+  if ! { command -v node >/dev/null 2>&1 && node -e "" >/dev/null 2>&1; }; then
+    echo "warning: node is not runnable here; $GRAPH was not regenerated — run scripts/wiki-graph.mjs --index" >&2
+    return 1
+  fi
+  node "$SCRIPT_DIR/wiki-graph.mjs" "$1/.wiki" --index "$1/$GRAPH" >/dev/null
+  git -C "$1" add -- "$GRAPH"
+}
+
 if ! git -C "$PARENT_WT" merge --squash "$MERGE_REF"; then
-  echo "CONFLICT — nothing was committed. Conflicting paths:" >&2
-  git -C "$PARENT_WT" diff --name-only --diff-filter=U >&2
-  echo "Ask the user: resolve and proceed, or abort?" >&2
-  echo "To back out: git -C '$PARENT_WT' reset --merge" >&2
-  exit 2
+  CONFLICTS="$(git -C "$PARENT_WT" diff --name-only --diff-filter=U)"
+  if [ "$CONFLICTS" = "$GRAPH" ] && regen_graph "$PARENT_WT"; then
+    echo "note: $GRAPH conflicted; regenerated it from the merged wiki" >&2
+  else
+    echo "CONFLICT — nothing was committed. Conflicting paths:" >&2
+    echo "$CONFLICTS" >&2
+    echo "Ask the user: resolve and proceed, or abort?" >&2
+    echo "To back out: git -C '$PARENT_WT' reset --merge" >&2
+    case "$CONFLICTS" in
+      *"$GRAPH"*) echo "$GRAPH is generated: resolve the others, then run scripts/wiki-graph.mjs --index rather than merging it" >&2 ;;
+    esac
+    exit 2
+  fi
 fi
 
 if [ -n "$FROM_ORIGIN" ] && [ -e "$PARENT_WT/.work-log-export" ]; then
@@ -113,6 +141,10 @@ if [ -n "$FROM_ORIGIN" ] && git -C "$PARENT_WT" diff --cached --quiet; then
   echo "merged=none"
   echo "status=empty-after-strip"
   exit 3
+fi
+
+if [ -n "$(git -C "$PARENT_WT" diff --cached --name-only -- .wiki ":(exclude)$GRAPH")" ]; then
+  regen_graph "$PARENT_WT" || true
 fi
 
 git -C "$PARENT_WT" commit -q -m "$MESSAGE"
